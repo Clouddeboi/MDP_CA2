@@ -1,0 +1,166 @@
+#pragma once
+#include <SFML/Graphics.hpp>
+#include "ResourceIdentifiers.hpp"
+#include "ResourceHolder.hpp"
+#include "SceneNode.hpp"
+#include "SceneLayers.hpp"
+#include "Aircraft.hpp"
+#include "TextureID.hpp"
+#include "SpriteNode.hpp"
+#include "CommandQueue.hpp"
+#include "BloomEffect.hpp"
+#include "SoundPlayer.hpp"
+#include "ChromaticAberrationEffect.hpp"
+#include "ScreenShakeEffect.hpp"
+#include "PickupType.hpp"
+
+#include <array>
+
+class World 
+{
+public:
+	explicit World(sf::RenderTarget& target, FontHolder& font, SoundPlayer& sounds);
+	void Update(sf::Time dt);
+	void Draw();
+
+	CommandQueue& GetCommandQueue();
+
+	bool HasAlivePlayer() const;
+	bool HasPlayerReachedEnd() const;
+
+	void SetPlayerAimDirection(int player_index, const sf::Vector2f& direction);
+	void AimPlayerAtMouse(int player_index);
+
+	Aircraft* GetPlayerAircraft(int player_index);
+
+	int GetPlayerScore(int player_index) const;
+	int GetRoundNumber() const;
+	bool IsRoundOver() const;
+	bool IsGameOver() const;
+	int GetWinner() const;
+	bool ShouldReturnToMenu() const;
+
+	void TriggerDamageEffect();
+	void TriggerScreenShake(float intensity, float duration);
+
+private:
+	void LoadTextures();
+	void BuildScene();
+	void AdaptPlayerPosition();
+	void AdaptPlayerVelocity();
+
+	void SpawnEnemies();
+	void AddEnemies();
+	void AddEnemy(AircraftType type, float relx, float rely);
+
+	void SpawnPickups();
+
+	sf::FloatRect GetViewBounds() const;
+	sf::FloatRect GetBattleFieldBounds() const;
+
+	void DestroyEntitiesOutsideView();
+	void GuideMissiles();
+
+	void HandleCollisions();
+	void UpdateSounds();
+	void AddPlatform(float x, float y, float width, float height, float unit);
+	void AddBox(float x, float y);
+
+	void CheckRoundEnd();
+	void StartNewRound();
+	void RespawnPlayers();
+	int CountAlivePlayers() const;
+	void UpdateScoreDisplay();
+	void UpdateRoundOverlay();
+
+	void UpdateDamageEffect(sf::Time dt);
+	void UpdateScreenShake(sf::Time dt);
+
+	void UpdateCameraZoom(sf::Time dt);
+
+private:
+	struct SpawnPoint
+	{
+		SpawnPoint(AircraftType type, float x, float y) :m_type(type), m_x(x), m_y(y)
+		{
+
+		}
+		AircraftType m_type;
+		float m_x;
+		float m_y;
+	};
+	struct PickupSpawnPoint
+	{
+		PickupSpawnPoint(PickupType type, float x, float y) : m_type(type), m_x(x), m_y(y)
+		{
+		}
+		PickupType m_type;
+		float m_x;
+		float m_y;
+	};
+
+private:
+	sf::RenderTarget& m_target;
+	sf::RenderTexture m_scene_texture;
+	sf::View m_camera;
+	TextureHolder m_textures;
+	FontHolder& m_fonts;
+	SoundPlayer& m_sounds;
+	SceneNode m_scenegraph;
+	std::array<SceneNode*, static_cast<int>(SceneLayers::kLayerCount)> m_scene_layers;
+	sf::FloatRect m_world_bounds;
+	sf::Vector2f m_spawn_position;
+	float m_scrollspeed;
+	std::vector<Aircraft*> m_player_aircrafts;
+
+
+	CommandQueue m_command_queue;
+
+	std::vector<SpawnPoint> m_enemy_spawn_points;
+	std::vector<Aircraft*> m_active_enemies;
+
+	std::vector<PickupSpawnPoint> m_pickup_spawn_points;
+	sf::Time m_pickup_spawn_timer;
+	sf::Time m_pickup_spawn_interval;
+
+	BloomEffect m_bloom_effect;
+	ChromaticAberrationEffect m_chromatic_effect;
+	float m_damage_effect_intensity;
+	sf::Time m_damage_effect_timer;
+	const float m_max_damage_intensity = 0.015f;
+	const sf::Time m_damage_effect_duration = sf::seconds(0.5f);
+
+	ScreenShakeEffect m_screen_shake_effect;
+	float m_screen_shake_intensity;
+	sf::Time m_screen_shake_timer;
+	sf::Time m_screen_shake_duration;
+	sf::Time m_screen_shake_time_accumulator;
+
+	std::vector<int> m_player_scores;
+	std::vector<sf::Vector2f> m_player_spawn_positions;
+	int m_current_round;
+	int m_points_to_win;
+	bool m_round_over;
+	sf::Time m_round_restart_timer;
+	const sf::Time m_round_restart_delay;
+
+	bool m_game_over;
+	sf::Time m_game_over_timer;
+	const sf::Time m_game_over_delay;
+
+	std::vector<TextNode*> m_score_displays;
+	std::optional<sf::Text> m_round_over_text;
+	std::optional<sf::Text> m_round_countdown_text;
+
+	float m_current_zoom_level;
+	sf::View m_saved_camera_state;
+	bool m_camera_state_saved;
+	const float m_min_zoom = 1.0f;
+	const float m_max_zoom = 1.35f;
+	const float m_zoom_speed = 0.5f;
+	const float m_min_player_distance = 400.f;
+	const float m_max_player_distance = 900.f;
+
+	sf::FloatRect m_camera_play_bounds;
+};
+

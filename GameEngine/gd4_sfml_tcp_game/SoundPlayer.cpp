@@ -1,0 +1,95 @@
+#include "SoundPlayer.hpp"
+#include "SoundEffect.hpp"
+#include <SFML/Audio/Listener.hpp>
+#include <cmath>
+
+
+namespace
+{
+	// Sound coordinate system, point of view of a player in front of the screen:
+	// X = left; Y = up; Z = back (out of the screen)
+	const float ListenerZ = 300.f;
+	const float Attenuation = 1.f;
+	const float MinDistance2D = 200.f;
+	const float MinDistance3D = std::sqrt(MinDistance2D * MinDistance2D + ListenerZ * ListenerZ);
+}
+
+SoundPlayer::SoundPlayer()
+{
+	m_sound_buffers.Load(SoundEffect::kAlliedGunfire, "Media/Sound/GunShot.wav");
+	m_sound_buffers.Load(SoundEffect::kEnemyGunfire, "Media/Sound/GunShot.wav");
+	m_sound_buffers.Load(SoundEffect::kExplosion1, "Media/Sound/Explosion1.wav");
+	m_sound_buffers.Load(SoundEffect::kExplosion2, "Media/Sound/Explosion2.wav");
+	m_sound_buffers.Load(SoundEffect::kLaunchMissile, "Media/Sound/LaunchMissile.wav");
+	m_sound_buffers.Load(SoundEffect::kCollectPickup, "Media/Sound/CollectPickup.wav");
+	m_sound_buffers.Load(SoundEffect::kButton, "Media/Sound/Button.wav");
+
+	m_sound_buffers.Load(SoundEffect::kButtonClick, "Media/Sound/ButtonClick.wav");
+	m_sound_buffers.Load(SoundEffect::kError, "Media/Sound/Error.wav");
+	m_sound_buffers.Load(SoundEffect::kStartGame, "Media/Sound/StartGame.wav");
+	m_sound_buffers.Load(SoundEffect::kPairedPlayer, "Media/Sound/PairedPlayer.wav");
+
+	//Power-up sounds were meant to have diffrent SFX, easily expandable 
+	m_sound_buffers.Load(SoundEffect::kCollectHealth, "Media/Sound/CollectPickup.wav");
+	m_sound_buffers.Load(SoundEffect::kCollectFireSpread, "Media/Sound/CollectPickup.wav");
+	m_sound_buffers.Load(SoundEffect::kCollectFireRate, "Media/Sound/CollectPickup.wav");
+	m_sound_buffers.Load(SoundEffect::kCollectDamage, "Media/Sound/CollectPickup.wav");
+	m_sound_buffers.Load(SoundEffect::kCollectJump, "Media/Sound/CollectPickup.wav");
+	m_sound_buffers.Load(SoundEffect::kCollectSpeed, "Media/Sound/CollectPickup.wav");
+	m_sound_buffers.Load(SoundEffect::kPowerUpExpired, "Media/Sound/Error.wav");
+
+	m_sound_buffers.Load(SoundEffect::kPlayerJump1, "Media/Sound/Jump1.wav");
+	m_sound_buffers.Load(SoundEffect::kPlayerJump2, "Media/Sound/Jump2.wav");
+	m_sound_buffers.Load(SoundEffect::kPlayerJump3, "Media/Sound/Jump3.wav");
+	m_sound_buffers.Load(SoundEffect::kPlayerJump4, "Media/Sound/Jump4.wav");
+	m_sound_buffers.Load(SoundEffect::kPlayerJump5, "Media/Sound/Jump5.wav");
+
+	m_sound_buffers.Load(SoundEffect::kPlayerLand1, "Media/Sound/JumpLand1.wav");
+	m_sound_buffers.Load(SoundEffect::kPlayerLand2, "Media/Sound/JumpLand2.wav");
+
+	m_sound_buffers.Load(SoundEffect::kPlayerHit1, "Media/Sound/Hit1.wav");
+	m_sound_buffers.Load(SoundEffect::kPlayerHit2, "Media/Sound/Hit2.wav");
+
+	m_sound_buffers.Load(SoundEffect::kPlayerDeath, "Media/Sound/Death.wav");
+
+	// Listener points towards the screen (default in SFML)
+	sf::Listener::setDirection({ 0.f, 0.f, -1.f });
+}
+
+void SoundPlayer::Play(SoundEffect effect)
+{
+	Play(effect, GetListenerPosition());
+}
+
+void SoundPlayer::Play(SoundEffect effect, sf::Vector2f position)
+{
+	m_sounds.emplace_back(m_sound_buffers.Get(effect));
+	sf::Sound& sound = m_sounds.back();
+
+	sound.setBuffer(m_sound_buffers.Get(effect));
+	sound.setPosition({ position.x, -position.y, 0.f });
+	sound.setAttenuation(Attenuation);
+	sound.setMinDistance(MinDistance3D);
+	sound.setVolume(100.f);
+
+	sound.play();
+}
+
+void SoundPlayer::RemoveStoppedSounds()
+{
+	m_sounds.remove_if([](const sf::Sound& s)
+		{
+			return s.getStatus() == sf::Sound::Status::Stopped;
+		});
+}
+
+void SoundPlayer::SetListenerPosition(sf::Vector2f position)
+{
+	sf::Listener::setPosition({ position.x, -position.y, ListenerZ });
+}
+
+sf::Vector2f SoundPlayer::GetListenerPosition() const
+{
+	sf::Vector3f position = sf::Listener::getPosition();
+	return sf::Vector2f(position.x, -position.y);
+}

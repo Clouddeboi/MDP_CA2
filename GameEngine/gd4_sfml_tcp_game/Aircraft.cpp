@@ -1,0 +1,861 @@
+#include "Aircraft.hpp"
+#include "TextureID.hpp"
+#include "ResourceHolder.hpp"
+#include <SFML/Graphics/RenderTarget.hpp>
+#include "DataTables.hpp"
+#include "Projectile.hpp"
+#include "PickupType.hpp"
+#include "Pickup.hpp"
+#include "SoundNode.hpp"
+#include <iostream>
+
+/*
+ * Code implementation assisted by Claude Sonnet 4.5
+ * Used for: "Player Directions, RotateVectorDeg function logic, Power-up implementation and bug fixing"
+ * Original implementation, modified/adapted by Michal Becmer (D00256088) for project requirements
+ */
+
+namespace
+{
+	const std::vector<AircraftData> Table = InitializeAircraftData();
+	float k_rad_to_deg = 180.f / 3.14159265358979323846f;
+
+	static sf::Vector2f RotateVectorDeg(const sf::Vector2f& v, float degrees)
+	{
+		const float rad = degrees * 3.14159265358979323846f / 180.f;
+		const float c = std::cos(rad);
+		const float s = std::sin(rad);
+		return { v.x * c - v.y * s, v.x * s + v.y * c };
+	}
+}
+
+TextureID ToTextureID(AircraftType type)
+{
+	switch (type)
+	{
+	case AircraftType::kEagle:
+		return TextureID::kEagle;
+		break;
+	case AircraftType::kEaglePlayer2:
+		return TextureID::kEntities;
+	case AircraftType::kRaptor:
+		return TextureID::kRaptor;
+		break;
+	case AircraftType::kAvenger:
+		return TextureID::kAvenger;
+		break;
+	}
+	return TextureID::kEagle;
+}
+
+Aircraft::Aircraft(AircraftType type, const TextureHolder& textures, const FontHolder& fonts, int player_id)
+	: Entity(Table[static_cast<int>(type)].m_hitpoints)
+	, m_type(type)
+	, m_player_id(player_id)
+	, m_sprite(textures.Get(Table[static_cast<int>(type)].m_texture), Table[static_cast<int>(type)].m_texture_rect)
+	, m_explosion(textures.Get(TextureID::kExplosion))
+	, m_health_display(nullptr)
+	, m_missile_display(nullptr)
+	, m_distance_travelled(0.f)
+	, m_directions_index(0)
+	, m_fire_rate(1)
+	, m_spread_level(1)
+	, m_is_firing(false)
+	, m_is_launching_missile(false)
+	, m_fire_countdown(sf::Time::Zero)
+	, m_missile_ammo(2)
+	, m_is_marked_for_removal(false)
+	, m_show_explosion(true)
+	, m_spawned_pickup(false)
+	, m_played_explosion_sound(false)
+	, m_is_on_ground(true)
+	, m_jump_speed(750.f)
+	, m_gun_world_rotation(0.f)
+	, m_gun_current_world_rotation(0.f)
+	, m_gun_rotation_speed(720.f)
+	, m_base_speed(Table[static_cast<int>(type)].m_speed)
+	, m_base_jump_speed(750.f)
+	, m_base_fire_rate(1)
+	, m_base_spread_level(1)
+	, m_damage_multiplier(1.0f)
+	, m_just_jumped(false)
+	, m_just_landed(false)
+	, m_just_got_hit(false)
+	, m_just_died(false)
+	, m_idle_animation(textures.Get(TextureID::kPlayer1Animations))
+	, m_run_animation(textures.Get(TextureID::kPlayer1Animations))
+	, m_current_animation(nullptr)
+	, m_use_animations(false)
+	, m_facing_right(true)
+	, m_dust_emitter(nullptr)
+	, m_is_emitting_dust(false)
+
+{
+	m_explosion.SetFrameSize(sf::Vector2i(256, 256));
+	m_explosion.SetNumFrames(16);
+	m_explosion.SetDuration(sf::seconds(1));
+	Utility::CentreOrigin(m_sprite);
+	Utility::CentreOrigin(m_explosion);
+
+	if (m_player_id >= 0)
+	{
+		//Create dust emitter for player and store pointer so we can toggle emission on/off
+		std::unique_ptr<EmitterNode> dust_emitter(new EmitterNode(ParticleType::kDust));
+		m_dust_emitter = dust_emitter.get();
+
+		//Position emitter at the players feet
+		m_dust_emitter->setPosition({ 0.f, 32.f });
+		m_dust_emitter->SetEmissionRate(15.f);
+
+		AttachChild(std::move(dust_emitter));
+
+		m_use_animations = true;
+
+		TextureID anim_texture = (m_player_id == 0) ? TextureID::kPlayer1Animations : TextureID::kPlayer2Animations;
+
+		m_idle_animation.SetTexture(textures.Get(anim_texture));
+		m_idle_animation.SetFrameSize(sf::Vector2i(64, 64));
+		m_idle_animation.SetNumFrames(4);
+		m_idle_animation.SetDuration(sf::seconds(0.5f));
+		m_idle_animation.SetRepeating(true);
+		Utility::CentreOrigin(m_idle_animation);
+
+		m_run_animation.SetTexture(textures.Get(anim_texture));
+		m_run_animation.SetFrameSize(sf::Vector2i(64, 64));
+		m_run_animation.SetNumFrames(4);
+		m_run_animation.SetDuration(sf::seconds(0.8f));
+		m_run_animation.SetRepeating(true);
+		Utility::CentreOrigin(m_run_animation);
+
+		m_current_animation = &m_idle_animation;
+	}
+
+	if (Table[static_cast<int>(type)].m_has_gun)
+	{
+		const AircraftData& d = Table[static_cast<int>(type)];
+
+		m_gun_sprite = std::make_unique<sf::Sprite>(textures.Get(d.m_gun_texture), d.m_gun_texture_rect);
+		Utility::CentreOrigin(*m_gun_sprite);
+
+		m_gun_offset = d.m_gun_offset;
+		m_has_gun = true;
+
+		// Initialize smoothing state so there's no jump on first frame
+		m_gun_current_world_rotation = m_gun_world_rotation;
+	}
+
+	m_fire_command.category = static_cast<int>(ReceiverCategories::kScene);
+	m_fire_command.action = [this, &textures](SceneNode& node, sf::Time dt)
+		{
+			CreateBullet(node, textures);
+		};
+
+	m_missile_command.category = static_cast<int>(ReceiverCategories::kScene);
+	m_missile_command.action = [this, &textures](SceneNode& node, sf::Time dt)
+		{
+			CreateProjectile(node, ProjectileType::kMissile, 0.f, 0.5f, textures);
+		};
+
+	m_drop_pickup_command.category = static_cast<int>(ReceiverCategories::kScene);
+	m_drop_pickup_command.action = [this, &textures](SceneNode& node, sf::Time dt)
+		{
+			CreatePickup(node, textures);
+		};
+
+	std::string* health = new std::string("");
+	std::unique_ptr<TextNode> health_display(new TextNode(fonts, *health));
+	m_health_display = health_display.get();
+	AttachChild(std::move(health_display));
+
+	if (Aircraft::GetCategory() == static_cast<int>(ReceiverCategories::kPlayerAircraft))
+	{
+		std::string* missile_ammo = new std::string("");
+		std::unique_ptr<TextNode> missile_display(new TextNode(fonts, *missile_ammo));
+		m_missile_display = missile_display.get();
+		AttachChild(std::move(missile_display));
+	}
+
+	UpdateTexts();
+}
+
+unsigned int Aircraft::GetCategory() const
+{
+	if (IsAllied())
+	{
+		//Return player category if player_id is set
+		if (m_player_id == 0)
+			return static_cast<unsigned int>(ReceiverCategories::kPlayer1);
+		else if (m_player_id == 1)
+			return static_cast<unsigned int>(ReceiverCategories::kPlayer2);
+		else
+			return static_cast<unsigned int>(ReceiverCategories::kPlayerAircraft);
+	}
+	return static_cast<unsigned int>(ReceiverCategories::kEnemyAircraft);
+}
+
+void Aircraft::SetPlayerId(int player_id)
+{
+	m_player_id = player_id;
+}
+
+int Aircraft::GetPlayerId() const
+{
+	return m_player_id;
+}
+
+void Aircraft::IncreaseFireRate()
+{
+	if (m_fire_rate < 5)
+	{
+		++m_fire_rate;
+	}
+}
+
+void Aircraft::IncreaseFireSpread()
+{
+	if (m_spread_level < 3)
+	{
+		++m_spread_level;
+	}
+}
+
+void Aircraft::CollectMissile(unsigned int count)
+{
+	m_missile_ammo += count;
+}
+void Aircraft::IncreaseDamage()
+{
+	m_damage_multiplier = 2.0f;
+}
+
+void Aircraft::IncreaseJumpHeight()
+{
+	m_jump_speed = m_base_jump_speed * 1.5f;
+}
+
+void Aircraft::IncreaseSpeed()
+{
+
+}
+
+void Aircraft::ApplyPowerUp(PickupType type, sf::Time duration)
+{
+	//If power-up of this type is already active, just refresh duration (don't stack)
+	for (auto& effect : m_active_powerups)
+	{
+		if (effect.type == type)
+		{
+			effect.remaining_duration = duration;
+			return;
+		}
+	}
+
+	//Apply the power-up effect
+	PowerUpEffect new_effect;
+	new_effect.type = type;
+	new_effect.remaining_duration = duration;
+	m_active_powerups.push_back(new_effect);
+
+	switch (type)
+	{
+	case PickupType::kFireSpread:
+		IncreaseFireSpread();
+		break;
+	case PickupType::kFireRate:
+		IncreaseFireRate();
+		break;
+	case PickupType::kDamageBoost:
+		IncreaseDamage();
+		break;
+	case PickupType::kJumpBoost:
+		IncreaseJumpHeight();
+		break;
+	case PickupType::kSpeedBoost:
+		//Speed boost is handled in GetMaxSpeed()
+		break;
+	default:
+		break;
+	}
+}
+
+bool Aircraft::HasActivePowerUp(PickupType type) const
+{
+	//Check if powerup is active
+	for (const auto& effect : m_active_powerups)
+	{
+		if (effect.type == type)
+			return true;
+	}
+	return false;
+}
+
+float Aircraft::GetDamageMultiplier() const
+{
+	return m_damage_multiplier;
+}
+
+void Aircraft::UpdatePowerUps(sf::Time dt, CommandQueue& commands)
+{
+	//Tick down all power-up timers
+	for (auto it = m_active_powerups.begin(); it != m_active_powerups.end(); )
+	{
+		it->remaining_duration -= dt;
+
+		if (it->remaining_duration <= sf::Time::Zero)
+		{
+			//Power-up expired, play sound and remove effect
+			PlayLocalSound(commands, SoundEffect::kPowerUpExpired);
+			RemovePowerUp(it->type);
+			it = m_active_powerups.erase(it);
+		}
+		else
+		{
+			++it;
+		}
+	}
+}
+
+void Aircraft::RemovePowerUp(PickupType type)
+{
+	switch (type)
+	{
+	case PickupType::kFireSpread:
+		if (m_spread_level > m_base_spread_level)
+			--m_spread_level;
+		break;
+	case PickupType::kFireRate:
+		if (m_fire_rate > m_base_fire_rate)
+			--m_fire_rate;
+		break;
+	case PickupType::kDamageBoost:
+		m_damage_multiplier = 1.0f;
+		break;
+	case PickupType::kJumpBoost:
+		m_jump_speed = m_base_jump_speed;
+		break;
+	case PickupType::kSpeedBoost:
+		//Speed automatically reverts via GetMaxSpeed()
+		break;
+	default:
+		break;
+	}
+}
+
+void Aircraft::UpdateTexts()
+{
+	m_health_display->SetString(std::to_string(GetHitPoints()) + "HP");
+	m_health_display->setPosition({ 0.f, -50.f });
+	m_health_display->setRotation(-getRotation());
+
+	m_health_display->SetColor(sf::Color::White);
+	m_health_display->SetOutlineColor(sf::Color::Black);
+	m_health_display->SetOutlineThickness(2.f);
+}
+
+void Aircraft::UpdateMovementPattern(sf::Time dt)
+{
+	if (m_player_id >= 0)
+		return;
+
+	//Enemy AI
+	const std::vector<Direction>& directions = Table[static_cast<int>(m_type)].m_directions;
+	if (!directions.empty())
+	{
+		//Move along the current direction, then change direction
+		if (m_distance_travelled > directions[m_directions_index].m_distance)
+		{
+			m_directions_index = (m_directions_index + 1) % directions.size();
+			m_distance_travelled = 0.f;
+		}
+
+		//Compute velocity
+		//Add 90 to move down the screen, 0 is right
+
+		double radians = Utility::ToRadians(directions[m_directions_index].m_angle + 90.f);
+		float vx = GetMaxSpeed() * std::cos(radians);
+		float vy = GetMaxSpeed() * std::sin(radians);
+
+		SetVelocity(vx, vy);
+		m_distance_travelled += GetMaxSpeed() * dt.asSeconds();
+	}
+}
+
+float Aircraft::GetMaxSpeed() const
+{
+	float base_speed = Table[static_cast<int>(m_type)].m_speed;
+
+	if (HasActivePowerUp(PickupType::kSpeedBoost))
+	{
+		return base_speed * 1.75f;
+	}
+
+	return base_speed;
+}
+
+void Aircraft::Fire()
+{
+	if (Table[static_cast<int>(m_type)].m_fire_interval != sf::Time::Zero)
+	{
+		m_is_firing = true;
+	}
+}
+
+
+void Aircraft::LaunchMissile()
+{
+	if (m_missile_ammo > 0)
+	{
+		m_is_launching_missile = true;
+		--m_missile_ammo;
+	}
+}
+
+void Aircraft::CreateBullet(SceneNode& node, const TextureHolder& textures) const
+{
+	ProjectileType type = IsAllied() ? ProjectileType::kAlliedBullet : ProjectileType::kEnemyBullet;
+	switch (m_spread_level)
+	{
+	case 1:
+		CreateProjectile(node, type, 0.0f, 0.5f, textures);
+		break;
+	case 2:
+		CreateProjectile(node, type, -0.5f, 0.5f, textures);
+		CreateProjectile(node, type, 0.5f, 0.5f, textures);
+		break;
+	case 3:
+		CreateProjectile(node, type, 0.0f, 0.5f, textures);
+		CreateProjectile(node, type, -0.5f, 0.5f, textures);
+		CreateProjectile(node, type, 0.5f, 0.5f, textures);
+		break;
+	}
+	
+}
+
+void Aircraft::CreateProjectile(SceneNode& node, ProjectileType type, float x_offset, float y_offset, const TextureHolder& textures) const
+{
+	std::unique_ptr<Projectile> projectile(new Projectile(type, textures, m_damage_multiplier));
+
+	const sf::Vector2f gun_world_pos = (m_has_gun && m_gun_sprite)
+		? (GetWorldPosition() + RotateVectorDeg(m_gun_offset, m_gun_current_world_rotation))
+		: GetWorldPosition();
+
+	float k_spread_angle_per_unit = 10.f;
+	const float spread_deg = x_offset * k_spread_angle_per_unit;
+
+	const float firing_angle_deg = m_gun_current_world_rotation + spread_deg;
+	const float firing_rad = Utility::ToRadians(firing_angle_deg);
+
+	sf::Vector2f velocity(std::cos(firing_rad) * projectile->GetMaxSpeed(),
+		std::sin(firing_rad) * projectile->GetMaxSpeed());
+
+	const float forward_offset = 12.f;
+	sf::Vector2f spawn_pos = gun_world_pos + sf::Vector2f(std::cos(firing_rad) * forward_offset,
+		std::sin(firing_rad) * forward_offset);
+
+	projectile->setPosition(spawn_pos);
+	projectile->SetVelocity(velocity);
+	projectile->setRotation(sf::degrees(firing_angle_deg));
+
+	node.AttachChild(std::move(projectile));
+}
+
+sf::FloatRect Aircraft::GetBoundingRect() const
+{
+	return GetWorldTransform().transformRect(m_sprite.getGlobalBounds());
+}
+
+bool Aircraft::IsMarkedForRemoval() const
+{
+	if (m_player_id >= 0)
+	{
+		return false;
+	}
+
+	//return IsDestroyed() && (m_explosion.IsFinished() || !m_show_explosion);
+}
+
+void Aircraft::DrawCurrent(sf::RenderTarget& target, sf::RenderStates states) const
+{
+	if (IsDestroyed() && m_player_id >= 0)
+	{
+		return;
+	}
+	else
+	{
+		if (m_use_animations && m_current_animation)
+		{
+			target.draw(*m_current_animation, states);
+		}
+		else
+		{
+			target.draw(m_sprite, states);
+		}
+
+		if (m_has_gun && m_gun_sprite)
+		{
+			//Orbit gun around the aircraft center using the smoothed world rotation.
+			const sf::Vector2f rotated_offset = RotateVectorDeg(m_gun_offset, m_gun_current_world_rotation);
+			const sf::Vector2f world_pos = GetWorldPosition() + rotated_offset;
+
+			m_gun_sprite->setPosition(world_pos);
+			m_gun_sprite->setRotation(sf::degrees(m_gun_current_world_rotation));
+
+			target.draw(*m_gun_sprite);
+		}
+	}
+}
+
+void Aircraft::AttachGun(const TextureHolder& textures, TextureID textureId, const sf::IntRect& textureRect, const sf::Vector2f& offset)
+{
+	m_gun_offset = offset;
+	m_has_gun = true;
+
+	m_gun_current_world_rotation = m_gun_world_rotation;
+}
+
+void Aircraft::AimGunAt(const sf::Vector2f& worldPosition)
+{
+	if (!m_has_gun || !m_gun_sprite)
+		return;
+
+	//Desired angle in world space
+	const sf::Vector2f my_world_pos = GetWorldPosition();
+	const float dx = worldPosition.x - my_world_pos.x;
+	const float dy = worldPosition.y - my_world_pos.y;
+	const float worldAngle = std::atan2(dy, dx) * k_rad_to_deg;
+
+	m_gun_world_rotation = worldAngle;
+}
+
+//Shortest signed angle difference in degrees in range [-180,180]
+static float ShortestAngleDiff(float fromDeg, float toDeg)
+{
+	float diff = std::fmod(toDeg - fromDeg, 360.f);
+	if (diff < -180.f) diff += 360.f;
+	if (diff > 180.f) diff -= 360.f;
+	return diff;
+}
+
+void Aircraft::SetGunOffset(const sf::Vector2f& offset)
+{
+	m_gun_offset = offset;
+}
+
+sf::Vector2f Aircraft::GetGunOffset() const
+{
+	return m_gun_offset;
+}
+
+void Aircraft::UpdateCurrent(sf::Time dt, CommandQueue& commands)
+{
+	if (m_player_id >= 0)
+	{
+		if (m_just_jumped)
+		{
+			PlayLocalSound(commands, GetRandomJumpSound());
+			m_just_jumped = false;
+		}
+
+		if (m_just_landed)
+		{
+			PlayLocalSound(commands, GetRandomJumpLandSound());
+			m_just_landed = false;
+		}
+
+		if (m_just_got_hit)
+		{
+			PlayLocalSound(commands, GetRandomHitSound());
+			m_just_got_hit = false;
+		}
+
+		if (m_just_died)
+		{
+			PlayLocalSound(commands, GetRandomDeathSound());
+			m_just_died = false;
+		}
+	}
+
+	if (IsDestroyed() && m_player_id >= 0)
+	{
+		SetVelocity(0.f, 0.f);
+
+		//Hide health display when dead
+		if (m_health_display)
+		{
+			m_health_display->SetString("");
+		}
+
+		return;
+	}
+
+	if (m_use_animations && m_current_animation)
+	{
+		sf::Vector2f velocity = GetVelocity();
+		bool is_moving = std::abs(velocity.x) > 10.f;
+
+		//Determine facing direction based on horizontal velocity
+		if (velocity.x > 10.f)
+		{
+			m_facing_right = true;
+		}
+		else if (velocity.x < -10.f)
+		{
+			m_facing_right = false;
+		}
+
+		//Flip horizontal scale of animation to match facing direction
+		if (m_facing_right)
+		{
+			m_current_animation->setScale({ 1.f, 1.f });
+		}
+		else
+		{
+			m_current_animation->setScale({ -1.f, 1.f });
+		}
+
+		if (m_dust_emitter)
+		{
+			//Only emit dust when moving, on the ground and not in knockback
+			bool should_emit = is_moving && IsOnGround() && !IsKnockbackActive();
+			m_dust_emitter->SetEmitting(should_emit);
+		}
+
+		//Switch animation based on movement state (idle or running)
+		if (is_moving && m_current_animation != &m_run_animation)
+		{
+			m_current_animation = &m_run_animation;
+			m_current_animation->Restart();
+		}
+		else if (!is_moving && m_current_animation != &m_idle_animation)
+		{
+			m_current_animation = &m_idle_animation;
+			m_current_animation->Restart();
+		}
+
+		m_current_animation->Update(dt);
+	}
+
+	UpdatePowerUps(dt, commands);
+
+	Entity::UpdateCurrent(dt, commands);
+	UpdateTexts();
+	UpdateMovementPattern(dt);
+
+	UpdateRollAnimation();
+
+	if (m_has_gun && m_gun_sprite)
+	{
+		const float dtSec = dt.asSeconds();
+
+		float angleDiff = ShortestAngleDiff(m_gun_current_world_rotation, m_gun_world_rotation);
+		const float maxStep = m_gun_rotation_speed * dtSec;
+		if (std::abs(angleDiff) > maxStep)
+			angleDiff = std::copysign(maxStep, angleDiff);
+
+		m_gun_current_world_rotation += angleDiff;
+
+		sf::Vector2f currentScale = m_gun_sprite->getScale();
+		m_gun_sprite->setScale({ std::abs(currentScale.x), std::abs(currentScale.y) });
+	}
+
+	//Check if bullets or misiles are fired
+	CheckProjectileLaunch(dt, commands);
+}
+
+void Aircraft::CheckProjectileLaunch(sf::Time dt, CommandQueue& commands)
+{
+	if (!IsAllied())
+	{
+		Fire();
+	}
+
+	if (m_is_firing && m_fire_countdown <= sf::Time::Zero)
+	{
+		PlayLocalSound(commands, IsAllied() ? SoundEffect::kEnemyGunfire : SoundEffect::kAlliedGunfire);
+		commands.Push(m_fire_command);
+		m_fire_countdown += Table[static_cast<int>(m_type)].m_fire_interval / (m_fire_rate + 1.f);
+		m_is_firing = false;
+	}
+	else if (m_fire_countdown > sf::Time::Zero)
+	{
+		//Wait, can't fire
+		m_fire_countdown -= dt;
+		m_is_firing = false;
+	}
+
+	//Missile launch
+	if (m_is_launching_missile)
+	{
+		PlayLocalSound(commands, SoundEffect::kLaunchMissile);
+		commands.Push(m_missile_command);
+		m_is_launching_missile = false;
+	}
+}
+
+bool Aircraft::IsAllied() const
+{
+	return m_type == AircraftType::kEagle || m_type == AircraftType::kEaglePlayer2;
+}
+
+void Aircraft::CreatePickup(SceneNode& node, const TextureHolder& textures) const
+{
+	auto type = static_cast<PickupType>(Utility::RandomInt(static_cast<int>(PickupType::kPickupCount)));
+	std::unique_ptr<Pickup> pickup(new Pickup(type, textures));
+	pickup->setPosition(GetWorldPosition());
+	pickup->SetVelocity(0.f, 0.f);
+	node.AttachChild(std::move(pickup));
+}
+
+void Aircraft::CheckPickupDrop(CommandQueue& commands)
+{
+	//TODO Get rid of the magic number 3 here 
+	if (!IsAllied() && Utility::RandomInt(3) == 0 && !m_spawned_pickup)
+	{
+		commands.Push(m_drop_pickup_command);
+	}
+	m_spawned_pickup = true;
+}
+
+void Aircraft::UpdateRollAnimation()
+{
+	if (Table[static_cast<int>(m_type)].m_has_roll_animation)
+	{
+		//Flip sprite based on velocity
+		const float vx = GetVelocity().x;
+		sf::Vector2f currentScale = m_sprite.getScale();
+
+		if (vx < 0.f && currentScale.x > 0.f)
+		{
+			m_sprite.setScale(sf::Vector2f(-currentScale.x, currentScale.y));
+		}
+		else if (vx > 0.f && currentScale.x < 0.f)
+		{
+			m_sprite.setScale(sf::Vector2f(-currentScale.x, currentScale.y));
+		}
+
+		sf::IntRect textureRect = Table[static_cast<int>(m_type)].m_texture_rect;
+		m_sprite.setTextureRect(textureRect);
+	}
+}
+
+void Aircraft::PlayLocalSound(CommandQueue& commands, SoundEffect effect)
+{
+	sf::Vector2f world_position = GetWorldPosition();
+
+	Command command;
+	command.category = static_cast<int>(ReceiverCategories::kSoundEffect);
+	command.action = DerivedAction<SoundNode>(
+		[effect, world_position](SoundNode& node, sf::Time)
+		{
+			node.PlaySound(effect, world_position);
+		});
+
+	commands.Push(command);
+}
+
+void Aircraft::Damage(int points)
+{
+	int old_hp = GetHitPoints();
+
+	Entity::Damage(points);
+
+	if (m_player_id >= 0)
+	{
+		if (IsDestroyed() && old_hp > 0)
+		{
+			m_just_died = true;
+		}
+		else if (!IsDestroyed())
+		{
+			m_just_got_hit = true;
+		}
+	}
+}
+
+SoundEffect Aircraft::GetRandomJumpSound() const
+{
+	int random = std::rand() % 5;
+
+	switch (random)
+	{
+	case 0: return SoundEffect::kPlayerJump1;
+	case 1: return SoundEffect::kPlayerJump2;
+	case 2: return SoundEffect::kPlayerJump3;
+	case 3: return SoundEffect::kPlayerJump4;
+	case 4: return SoundEffect::kPlayerJump5;
+	default: return SoundEffect::kPlayerJump1;
+	}
+}
+
+SoundEffect Aircraft::GetRandomJumpLandSound() const
+{
+	int random = std::rand() % 2;
+
+	switch (random)
+	{
+	case 0: return SoundEffect::kPlayerLand1;
+	case 1: return SoundEffect::kPlayerLand2;
+	default: return SoundEffect::kPlayerLand1;
+	}
+}
+
+SoundEffect Aircraft::GetRandomHitSound() const
+{
+	int random = std::rand() % 2;
+
+	switch (random)
+	{
+	case 0: return SoundEffect::kPlayerHit1;
+	case 1: return SoundEffect::kPlayerHit2;
+	default: return SoundEffect::kPlayerHit1;
+	}
+}
+
+SoundEffect Aircraft::GetRandomDeathSound() const
+{
+	int random = std::rand() % 1;
+
+	switch (random)
+	{
+	case 0: return SoundEffect::kPlayerDeath;
+	default: return SoundEffect::kPlayerDeath;
+	}
+}
+
+void Aircraft::Jump()
+{
+	if (m_is_on_ground)
+	{
+		sf::Vector2f vel = GetVelocity();
+		vel.y = -m_jump_speed;
+		SetVelocity(vel);
+		m_is_on_ground = false;
+		move({ 0.f, -2.f });
+		m_just_jumped = true;
+	}
+}
+
+void Aircraft::SetOnGround(bool grounded)
+{
+	bool was_airborne = !m_is_on_ground;
+	m_is_on_ground = grounded;
+	if (m_is_on_ground)
+	{
+		sf::Vector2f vel = GetVelocity();
+		if (vel.y > 0.f)
+		{
+			vel.y = 0.f;
+			SetVelocity(vel);
+		}
+
+		if (was_airborne)
+		{
+			m_just_landed = true;
+		}
+	}
+}
+
+bool Aircraft::IsOnGround() const
+{
+	return m_is_on_ground;
+}
