@@ -3,7 +3,7 @@
 #include "World.hpp"
 #include "Player.hpp"
 #include "SoundPlayer.hpp"
-#include <array>
+#include <vector>
 
 class GameState : public State
 {
@@ -15,7 +15,7 @@ public:
 
 private:
 	World m_world;
-	std::array<Player, 2> m_players;
+	std::vector<Player> m_players;
 	SoundPlayer& m_sounds;
 };
 

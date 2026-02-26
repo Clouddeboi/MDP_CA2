@@ -19,7 +19,7 @@
 class World 
 {
 public:
-	explicit World(sf::RenderTarget& target, FontHolder& font, SoundPlayer& sounds);
+	explicit World(sf::RenderTarget& target, FontHolder& font, SoundPlayer& sounds, int player_count = 2);
 	void Update(sf::Time dt);
 	void Draw();
 
@@ -42,6 +42,9 @@ public:
 
 	void TriggerDamageEffect();
 	void TriggerScreenShake(float intensity, float duration);
+
+	int GetPlayerCount() const;
+	int GetMaxPlayers() const;
 
 private:
 	void LoadTextures();
@@ -78,6 +81,8 @@ private:
 
 	void UpdateCameraZoom(sf::Time dt);
 
+	void GenerateSpawnPositions();
+
 private:
 	struct SpawnPoint
 	{
@@ -100,6 +105,8 @@ private:
 	};
 
 private:
+	static constexpr int kMaxPlayers = 20;
+
 	sf::RenderTarget& m_target;
 	sf::RenderTexture m_scene_texture;
 	sf::View m_camera;
@@ -113,6 +120,7 @@ private:
 	float m_scrollspeed;
 	std::vector<Aircraft*> m_player_aircrafts;
 
+	int m_player_count;
 
 	CommandQueue m_command_queue;
 

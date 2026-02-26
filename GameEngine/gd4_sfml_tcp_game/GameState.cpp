@@ -7,12 +7,18 @@
 #include "SoundPlayer.hpp"
 #include <iostream> 
 
-GameState::GameState(StateStack& stack, Context context) : State(stack, context), m_world(*context.window, *context.fonts, *context.sounds), m_players{ { Player(0), Player(1) } }, m_sounds(*context.sounds)
+GameState::GameState(StateStack& stack, Context context) : State(stack, context), m_world(*context.window, *context.fonts, *context.sounds, 2), m_players(), m_sounds(*context.sounds) 
 {
 	//Play the music
 	context.music->Play(MusicThemes::kMissionTheme);
 
 	auto& config = PlayerBindingConfig::GetInstance();
+	int player_count = 2; // Default to 2 players for now (will be dynamic in commit 4)
+
+	for (int i = 0; i < player_count; ++i)
+	{
+		m_players.emplace_back(i);
+	}
 
 	if (config.HasBindings())
 	{
@@ -43,7 +49,7 @@ GameState::GameState(StateStack& stack, Context context) : State(stack, context)
 		//Fallback: Old auto assignment logic
 		std::cout << "[GAME] No bindings found, using auto-assignment\n";
 		int assigned_controllers = 0;
-		for (unsigned int i = 0; i < sf::Joystick::Count && assigned_controllers < 2; ++i)
+		for (int i = 0; i < static_cast<int>(m_players.size()); ++i)
 		{
 			if (sf::Joystick::isConnected(i))
 			{

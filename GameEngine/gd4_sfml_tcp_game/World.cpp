@@ -21,7 +21,7 @@
  * Original implementation, modified/adapted by Michal Becmer (D00256088) for project requirements
  */
 
-World::World(sf::RenderTarget& output_target, FontHolder& font, SoundPlayer& sounds)
+World::World(sf::RenderTarget& output_target, FontHolder& font, SoundPlayer& sounds, int player_count) 
 	:m_target(output_target)
 	,m_camera(output_target.getDefaultView())
 	,m_textures()
@@ -33,7 +33,8 @@ World::World(sf::RenderTarget& output_target, FontHolder& font, SoundPlayer& sou
 	,m_spawn_position(m_world_bounds.size.x / 2.f, m_world_bounds.size.y - 300.f)
 	,m_scrollspeed(0.f)//Setting it to 0 since we don't want our players to move up automatically
 	,m_scene_texture({ m_target.getSize().x, m_target.getSize().y })
-	,m_player_scores(2, 0)//2 players, 0 points
+	,m_player_scores(player_count, 0)
+	,m_player_count(player_count)
 	,m_current_round(1)
 	,m_points_to_win(5)
 	,m_round_over(false)
@@ -63,8 +64,7 @@ World::World(sf::RenderTarget& output_target, FontHolder& font, SoundPlayer& sou
 	sf::Vector2f cameraSize = m_camera.getSize();
 	m_camera.setCenter({ m_world_bounds.size.x / 2.f, m_world_bounds.size.y / 2.f });
 
-	m_player_spawn_positions.push_back({ 200.f, 0.f });
-	m_player_spawn_positions.push_back({ 1100.f, 0.f });
+	GenerateSpawnPositions();
 
 	m_round_over_text.emplace(m_fonts.Get(Font::kMain), "", 80);
 	m_round_over_text->setFillColor(sf::Color::White);
@@ -512,10 +512,13 @@ void World::UpdateRoundOverlay()
 	if (last_round_winner >= 0)
 	{
 		message = "Player " + std::to_string(last_round_winner + 1) + " Wins!";
+		// Temporary color assignment - will use player colors in commit 2
 		if (last_round_winner == 0)
 			m_round_over_text->setFillColor(sf::Color::Red);
 		else if (last_round_winner == 1)
 			m_round_over_text->setFillColor(sf::Color::Yellow);
+		else
+			m_round_over_text->setFillColor(sf::Color::White);
 	}
 	else
 	{
@@ -782,41 +785,34 @@ void World::BuildScene()
 		});
 	m_scene_layers[static_cast<int>(SceneLayers::kBackground)]->AttachChild(std::move(background_sprite));
 
-	const int kMaxPlayers = 2;
-
-	for (int i = 0; i < kMaxPlayers; ++i)
+	//Create players based on configured player count
+	for (int i = 0; i < m_player_count; ++i)
 	{
-		AircraftType player_type = (i == 0) ? AircraftType::kEagle : AircraftType::kEaglePlayer2;
+		AircraftType player_type = (i == 0) ? AircraftType::kEagle :
+			(i == 1) ? AircraftType::kEaglePlayer2 :
+			AircraftType::kEagle;
+
 		std::unique_ptr<Aircraft> player(new Aircraft(player_type, m_textures, m_fonts, i));
 		Aircraft* player_aircraft = player.get();
 
-		//Position players side by side
-		sf::Vector2f spawn_position(0.f, 0.f);
-		if (i == 0)
+		if (i < static_cast<int>(m_player_spawn_positions.size()))
 		{
-			spawn_position.x = 200.f;
-			spawn_position.y = 0.f;
-
+			player_aircraft->setPosition(m_player_spawn_positions[i]);
 		}
-		else if (i == 1)
+		else
 		{
-			spawn_position.x = 1200.f;
-			spawn_position.y = 0.f;
+			//Fallback if spawn positions weren't generated properly
+			player_aircraft->setPosition({ 200.f + (i * 100.f), 0.f });
 		}
 
-		player_aircraft->setPosition(spawn_position);
 		m_scene_layers[static_cast<int>(SceneLayers::kUpperAir)]->AttachChild(std::move(player));
 
 		player_aircraft->SetGunOffset({ 50.f, -10.f });
-
-		//Enable physics on the player so gravity, impulses, drag affect it
 		player_aircraft->SetUsePhysics(true);
 		player_aircraft->SetMass(1.0f);
 		player_aircraft->SetLinearDrag(0.5f);
-		//Initial vertical velocity zero
 		player_aircraft->SetVelocity(0.f, 0.f);
 
-		//Add to players vector
 		m_player_aircrafts.push_back(player_aircraft);
 	}
 
@@ -856,6 +852,34 @@ void World::BuildScene()
 
 	const float score_text_size = 2.f;
 	const float score_spacing = 60.f;
+
+	//Create score displays for all players
+	for (int i = 0; i < m_player_count; ++i)
+	{
+		std::string* score_text = new std::string("0");
+		std::unique_ptr<TextNode> score_display(new TextNode(m_fonts, *score_text));
+		score_display->setPosition({ 20.f, 20.f + (i * score_spacing) });
+		score_display->setScale({ score_text_size, score_text_size });
+
+		if (i == 0)
+			score_display->SetColor(sf::Color::Red);
+		else if (i == 1)
+			score_display->SetColor(sf::Color::Yellow);
+		else
+		{
+			sf::Color player_color(
+				100 + (i * 30) % 155,
+				100 + (i * 50) % 155,
+				100 + (i * 70) % 155
+			);
+			score_display->SetColor(player_color);
+		}
+
+		score_display->SetOutlineColor(sf::Color::Black);
+		score_display->SetOutlineThickness(3.f);
+		m_score_displays.push_back(score_display.get());
+		m_scene_layers[static_cast<int>(SceneLayers::kUI)]->AttachChild(std::move(score_display));
+	}
 
 	std::string* p1_score_text = new std::string("0");
 	std::unique_ptr<TextNode> p1_score_display(new TextNode(m_fonts, *p1_score_text));
@@ -1612,5 +1636,48 @@ void World::UpdateSounds()
 
 	// Remove unused sounds
 	m_sounds.RemoveStoppedSounds();
+}
+
+void World::GenerateSpawnPositions()
+{
+	m_player_spawn_positions.clear();
+
+	const float arena_width = m_world_bounds.size.x;
+	const float spawn_y = 0.f;
+	const float edge_padding = 150.f;
+	const float usable_width = arena_width - (2.f * edge_padding);
+
+	if (m_player_count == 1)
+	{
+		//Single player spawns in center
+		m_player_spawn_positions.push_back({ arena_width / 2.f, spawn_y });
+	}
+	else if (m_player_count == 2)
+	{
+		//Two players spawn on left and right
+		m_player_spawn_positions.push_back({ edge_padding, spawn_y });
+		m_player_spawn_positions.push_back({ arena_width - edge_padding, spawn_y });
+	}
+	else
+	{
+		//Distribute players evenly across the arena
+		float spacing = usable_width / static_cast<float>(m_player_count - 1);
+
+		for (int i = 0; i < m_player_count; ++i)
+		{
+			float x_pos = edge_padding + (spacing * i);
+			m_player_spawn_positions.push_back({ x_pos, spawn_y });
+		}
+	}
+}
+
+int World::GetPlayerCount() const
+{
+	return m_player_count;
+}
+
+int World::GetMaxPlayers() const
+{
+	return kMaxPlayers;
 }
 	
