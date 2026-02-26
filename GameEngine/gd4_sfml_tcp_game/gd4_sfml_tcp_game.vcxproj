@@ -169,6 +169,7 @@
     <ClCompile Include="PlayerBindingManager.cpp" />
     <ClCompile Include="PostEffect.cpp" />
     <ClCompile Include="Projectile.cpp" />
+    <ClCompile Include="ReceiverCategories.cpp" />
     <ClCompile Include="SceneNode.cpp" />
     <ClCompile Include="ScreenShakeEffect.cpp" />
     <ClCompile Include="SettingsState.cpp" />

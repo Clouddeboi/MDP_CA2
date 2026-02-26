@@ -34,19 +34,10 @@ Player::Player(int player_id) : m_player_id(player_id), m_current_mission_status
     //Set initial action bindings
     InitialiseActions();
 
-    ReceiverCategories player_category;
-    if (m_player_id == 0)
+    ReceiverCategories player_category = GetPlayerCategory(m_player_id);
+    for (auto& pair : m_action_binding)
     {
-        player_category = ReceiverCategories::kPlayer1;
-    }
-    else if (m_player_id == 1)
-    {
-        player_category = ReceiverCategories::kPlayer2;
-    }
-    else
-    {
-        //Fallback to generic player aircraft
-        player_category = ReceiverCategories::kPlayerAircraft;
+        pair.second.category = static_cast<unsigned int>(player_category);
     }
 
     //Assign all categories to a player's aircraft

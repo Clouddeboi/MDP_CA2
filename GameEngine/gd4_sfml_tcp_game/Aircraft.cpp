@@ -184,13 +184,16 @@ unsigned int Aircraft::GetCategory() const
 {
 	if (IsAllied())
 	{
-		//Return player category if player_id is set
-		if (m_player_id == 0)
-			return static_cast<unsigned int>(ReceiverCategories::kPlayer1);
-		else if (m_player_id == 1)
-			return static_cast<unsigned int>(ReceiverCategories::kPlayer2);
+		//Return player category if player_id is valid
+		if (m_player_id >= 0 && m_player_id < 20)
+		{
+			return static_cast<unsigned int>(GetPlayerCategory(m_player_id));
+		}
 		else
+		{
+			//Fallback to generic player aircraft for invalid IDs
 			return static_cast<unsigned int>(ReceiverCategories::kPlayerAircraft);
+		}
 	}
 	return static_cast<unsigned int>(ReceiverCategories::kEnemyAircraft);
 }
