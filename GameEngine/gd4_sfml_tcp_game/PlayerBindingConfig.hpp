@@ -54,9 +54,15 @@ public:
 		return false;
 	}
 
+	void SetPlayerCount(int count)
+	{
+		m_player_count = count;
+	}
+
 private:
 	static constexpr int kMaxPlayers = 2;
 	std::array<std::optional<InputDeviceInfo>, kMaxPlayers> m_player_devices;
+	int m_player_count = 2;
 
 	PlayerBindingConfig() = default;
 	~PlayerBindingConfig() = default;

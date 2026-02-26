@@ -166,6 +166,7 @@
     <ClCompile Include="Pickup.cpp" />
     <ClCompile Include="Platform.cpp" />
     <ClCompile Include="Player.cpp" />
+    <ClCompile Include="PlayerBindingDisplay.cpp" />
     <ClCompile Include="PlayerBindingManager.cpp" />
     <ClCompile Include="PostEffect.cpp" />
     <ClCompile Include="Projectile.cpp" />
@@ -224,6 +225,7 @@
     <ClInclude Include="Platform.hpp" />
     <ClInclude Include="Player.hpp" />
     <ClInclude Include="PlayerBindingConfig.hpp" />
+    <ClInclude Include="PlayerBindingDisplay.hpp" />
     <ClInclude Include="PlayerBindingManager.hpp" />
     <ClInclude Include="PostEffect.hpp" />
     <ClInclude Include="Projectile.hpp" />

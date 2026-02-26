@@ -15,48 +15,65 @@ BindingState::BindingState(StateStack& stack, Context context)
 	: State(stack, context)
 	, m_background_sprite(context.textures->Get(TextureID::kTitleScreen))
 	, m_device_detector()
-	, m_binding_manager()
-	, m_all_players_bound(false)
+	, m_joined_players()
 	, m_elapsed_time(sf::Time::Zero)
 {
 	sf::RenderWindow& window = *GetContext().window;
 	sf::Vector2f windowSize(window.getSize());
 
-	//Title Text
-	m_title_text.emplace(context.fonts->Get(Font::kMain), "PLAYER BINDING", 60);
+	// Title Text
+	m_title_text.emplace(context.fonts->Get(Font::kMain), "PLAYER LOBBY");
+	m_title_text->setCharacterSize(60);
 	m_title_text->setFillColor(sf::Color::White);
 	m_title_text->setOutlineColor(sf::Color::Black);
-	m_title_text->setOutlineThickness(2.f);
+	m_title_text->setOutlineThickness(3.f);
 	Utility::CentreOrigin(*m_title_text);
-	m_title_text->setPosition({ windowSize.x / 2.f, 100.f });
+	m_title_text->setPosition({ windowSize.x / 2.f, 40.f });
 
-	//Inatructions Text
-	m_instructions_text.emplace(context.fonts->Get(Font::kMain), "Press any button on your input device to bind", 24);
-	m_instructions_text->setFillColor(sf::Color::White);
+	// Instructions Text
+	m_instructions_text.emplace(context.fonts->Get(Font::kMain), "Press any input to join");
+	m_instructions_text->setCharacterSize(28);
+	m_instructions_text->setFillColor(sf::Color::Cyan);
 	m_instructions_text->setOutlineColor(sf::Color::Black);
 	m_instructions_text->setOutlineThickness(2.f);
 	Utility::CentreOrigin(*m_instructions_text);
-	m_instructions_text->setPosition({ windowSize.x / 2.f, 180.f });
+	m_instructions_text->setPosition({ windowSize.x / 2.f, 110.f });
 
-	//Player Status Text
-	for (int i = 0; i < kMaxPlayers; ++i)
-	{
-		m_player_status_text[i].emplace(context.fonts->Get(Font::kMain), "", 32);
-		m_player_status_text[i]->setFillColor(sf::Color::White);
-		m_player_status_text[i]->setPosition({ 100.f, 280.f + (i * 100.f) });
-	}
-
-	//Ready Text
-	m_ready_text.emplace(context.fonts->Get(Font::kMain), "Press ENTER to start game\nPress ESC to unbind all", 28);
-	m_ready_text->setFillColor(sf::Color::Green);
+	// Ready Text (initially hidden)
+	m_ready_text.emplace(context.fonts->Get(Font::kMain), "");
+	m_ready_text->setCharacterSize(24);
+	m_ready_text->setFillColor(sf::Color::White);
 	m_ready_text->setOutlineColor(sf::Color::Black);
 	m_ready_text->setOutlineThickness(2.f);
 	Utility::CentreOrigin(*m_ready_text);
-	m_ready_text->setPosition({ windowSize.x / 2.f, 500.f });
+	m_ready_text->setPosition({ windowSize.x / 2.f, windowSize.y - 60.f });
 
-	UpdatePlayerStatusText();
+	// Setup grid layout for player slots
+	const float slotWidth = 180.f;
+	const float slotHeight = 140.f;
+	const float gridSpacingX = 200.f;
+	const float gridSpacingY = 160.f;
+	const float gridStartX = (windowSize.x - (kGridColumns * gridSpacingX - 20.f)) / 2.f;
+	const float gridStartY = 160.f;
 
-	std::cout << "[BindingState] Binding state initialized\n";
+	// Initialize player slots
+	for (int i = 0; i < kMaxPlayers; ++i)
+	{
+		m_player_slots.emplace_back(*context.fonts);
+
+		int row = i / kGridColumns;
+		int col = i % kGridColumns;
+
+		sf::Vector2f slotPos(
+			gridStartX + (col * gridSpacingX),
+			gridStartY + (row * gridSpacingY)
+		);
+
+		m_player_slots[i].SetPosition(slotPos);
+		m_player_slots[i].SetSize({ slotWidth, slotHeight });
+	}
+
+	std::cout << "[BindingState] Grid-based player lobby initialized (max " << kMaxPlayers << " players)\n";
 }
 
 void BindingState::Draw()
@@ -72,15 +89,27 @@ void BindingState::Draw()
 	if (m_instructions_text)
 		window.draw(*m_instructions_text);
 
+	// Draw all player slots in the grid
 	for (int i = 0; i < kMaxPlayers; ++i)
 	{
-		if (m_player_status_text[i])
-			window.draw(*m_player_status_text[i]);
+		window.draw(m_player_slots[i]);
 	}
 
-	//Only shows ready text when all players are bound
-	if (m_all_players_bound && m_ready_text)
+	// Show ready text when we have players
+	if (GetJoinedPlayerCount() >= 2 && m_ready_text)
 	{
+		std::string readyMsg = "Press ENTER to start (" + std::to_string(GetJoinedPlayerCount()) + " players)";
+		readyMsg += "\nPress ESC to clear all";
+		m_ready_text->setString(readyMsg);
+		m_ready_text->setFillColor(sf::Color::Green);
+		Utility::CentreOrigin(*m_ready_text);
+		window.draw(*m_ready_text);
+	}
+	else if (GetJoinedPlayerCount() == 1 && m_ready_text)
+	{
+		m_ready_text->setString("Need at least 2 players to start\nPress ESC to clear all");
+		m_ready_text->setFillColor(sf::Color::Yellow);
+		Utility::CentreOrigin(*m_ready_text);
 		window.draw(*m_ready_text);
 	}
 }
@@ -93,81 +122,86 @@ bool BindingState::Update(sf::Time dt)
 
 bool BindingState::HandleEvent(const sf::Event& event)
 {
-	//Check for binding complete and Enter pressed to start game
-	if (m_all_players_bound)
+	//Check for ENTER to start game
+	if (const auto* keyPressed = event.getIf<sf::Event::KeyPressed>())
 	{
-		if (const auto* keyPressed = event.getIf<sf::Event::KeyPressed>())
+		if (keyPressed->code == sf::Keyboard::Key::Enter)
 		{
-			if (keyPressed->code == sf::Keyboard::Key::Enter)
+			if (GetJoinedPlayerCount() >= 2)
 			{
-				std::cout << "[BindingState] Starting game with bindings:\n";
+				std::cout << "[BindingState] Starting game with " << GetJoinedPlayerCount() << " players:\n";
 				GetContext().sounds->Play(SoundEffect::kStartGame);
 
 				//Save bindings to global config
 				auto& config = PlayerBindingConfig::GetInstance();
-				for (int i = 0; i < kMaxPlayers; ++i)
+				config.SetPlayerCount(GetJoinedPlayerCount());
+
+				for (size_t i = 0; i < m_joined_players.size(); ++i)
 				{
-					auto device = m_binding_manager.GetPlayerDevice(i);
-					if (device.has_value())
-					{
-						config.SetPlayerDevice(i, device.value());
-						std::cout << "  Player " << (i + 1) << " -> "
-							<< InputDeviceDetector::GetDeviceDescription(device.value()) << "\n";
-					}
+					config.SetPlayerDevice(static_cast<int>(i), m_joined_players[i].device);
+					std::cout << "  Player " << (i + 1) << " -> "
+						<< InputDeviceDetector::GetDeviceDescription(m_joined_players[i].device) << "\n";
 				}
 
-				//Transition to game state and remove binding state from stack
+				//Transition to game state
 				RequestStackPop();
 				RequestStackPush(StateID::kGame);
+				return false;
+			}
+			else
+			{
+				std::cout << "[BindingState] Need at least 2 players to start!\n";
+				GetContext().sounds->Play(SoundEffect::kError);
+			}
+			return false;
+		}
+		else if (keyPressed->code == sf::Keyboard::Key::Escape)
+		{
+			//ESC only goes back to menu if no players joined/are bound
+			if (GetJoinedPlayerCount() == 0)
+			{
+				GetContext().sounds->Play(SoundEffect::kButtonClick);
+				RequestStackPop();
+				RequestStackPush(StateID::kMenu);
 				return false;
 			}
 		}
 	}
 
-	//If ESC is pressed, either unbind all players or go back to menu if no players are currently bound
-	if (const auto* keyPressed = event.getIf<sf::Event::KeyPressed>())
-	{
-		if (keyPressed->code == sf::Keyboard::Key::Escape)
-		{
-			if (m_binding_manager.GetBoundPlayerCount() > 0)
-			{
-				//Unbind all players
-				GetContext().sounds->Play(SoundEffect::kError);
-				m_binding_manager.UnbindAll();
-				m_all_players_bound = false;
-				UpdatePlayerStatusText();
-				std::cout << "[BindingState] All players unbound\n";
-			}
-			else
-			{
-				//Go back to menu
-				GetContext().sounds->Play(SoundEffect::kButtonClick);
-				RequestStackPop();
-				RequestStackPush(StateID::kMenu);
-			}
-			return false;
-		}
-	}
-
-	//Detect input events for binding
 	if (m_device_detector.IsInputEvent(event))
 	{
 		auto device = m_device_detector.DetectDeviceFromEvent(event);
 		if (device.has_value())
 		{
-			//Try to bind to first unbound player
-			for (int i = 0; i < kMaxPlayers; ++i)
+			//Check if this device is already bound to a player
+			int existingPlayerIndex = -1;
+			for (size_t i = 0; i < m_joined_players.size(); ++i)
 			{
-				if (!m_binding_manager.IsPlayerBound(i))
+				if (m_joined_players[i].device.type == device->type &&
+					m_joined_players[i].device.deviceIndex == device->deviceIndex)
 				{
-					if (m_binding_manager.TryBindPlayer(i, device.value()))
-					{
-						GetContext().sounds->Play(SoundEffect::kPairedPlayer);
-						UpdatePlayerStatusText();
-						CheckBindingComplete();
-					}
-					break;//Only bind one player per input event, so break after first attempt
+					existingPlayerIndex = static_cast<int>(i);
+					break;
 				}
+			}
+
+			if (existingPlayerIndex >= 0)
+			{
+				std::cout << "[BindingState] Player " << (existingPlayerIndex + 1) << " left\n";
+				RemovePlayer(existingPlayerIndex);
+				GetContext().sounds->Play(SoundEffect::kError);
+			}
+			else if (CanAddMorePlayers())
+			{
+				AddPlayer(device.value());
+				GetContext().sounds->Play(SoundEffect::kPairedPlayer);
+				std::cout << "[BindingState] Player " << GetJoinedPlayerCount() << " joined with "
+					<< InputDeviceDetector::GetDeviceDescription(device.value()) << "\n";
+			}
+			else
+			{
+				std::cout << "[BindingState] Maximum players reached!\n";
+				GetContext().sounds->Play(SoundEffect::kError);
 			}
 		}
 	}
@@ -175,77 +209,65 @@ bool BindingState::HandleEvent(const sf::Event& event)
 	return false;
 }
 
-void BindingState::UpdateInstructions()
+void BindingState::AddPlayer(const InputDeviceInfo& device)
 {
-	if (!m_instructions_text)
+	if (!CanAddMorePlayers())
 		return;
 
-	int boundCount = m_binding_manager.GetBoundPlayerCount();
+	int playerIndex = static_cast<int>(m_joined_players.size());
 
-	if (boundCount == 0)
-	{
-		m_instructions_text->setString("Press any button on your input device to bind");
-	}
-	else if (boundCount == 1)
-	{
-		m_instructions_text->setString("Player 2: Press any button on a different device");
-	}
-	else
-	{
-		m_instructions_text->setString("All players bound! Ready to start!");
-	}
+	PlayerBinding newPlayer;
+	newPlayer.playerId = playerIndex;
+	newPlayer.device = device;
+	newPlayer.isBound = true;
 
-	Utility::CentreOrigin(*m_instructions_text);
-	sf::RenderWindow& window = *GetContext().window;
-	m_instructions_text->setPosition({ static_cast<float>(window.getSize().x) / 2.f, 180.f });
+	m_joined_players.push_back(newPlayer);
+
+	// Update grid slot
+	m_player_slots[playerIndex].SetPlayerInfo(playerIndex + 1, device);
+
+	// Set default color (will be customizable in commit 6)
+	std::vector<sf::Color> default_colors = {
+		sf::Color::Red, sf::Color::Yellow, sf::Color::Blue, sf::Color::Green,
+		sf::Color::Magenta, sf::Color::Cyan, sf::Color(255, 165, 0), sf::Color(128, 0, 128),
+		sf::Color(255, 192, 203), sf::Color(165, 42, 42), sf::Color(255, 255, 0), sf::Color(0, 255, 127),
+		sf::Color(255, 20, 147), sf::Color(0, 191, 255), sf::Color(255, 140, 0), sf::Color(50, 205, 50),
+		sf::Color(218, 112, 214), sf::Color(240, 230, 140), sf::Color(64, 224, 208), sf::Color(255, 99, 71)
+	};
+
+	if (playerIndex < static_cast<int>(default_colors.size()))
+	{
+		m_player_slots[playerIndex].SetPlayerColor(default_colors[playerIndex]);
+	}
 }
 
-void BindingState::UpdatePlayerStatusText()
+void BindingState::RemovePlayer(int index)
 {
-	for (int i = 0; i < kMaxPlayers; ++i)
+	if (index >= 0 && index < static_cast<int>(m_joined_players.size()))
 	{
-		if (!m_player_status_text[i])
-			continue;
+		m_joined_players.erase(m_joined_players.begin() + index);
 
-		std::string statusText = "Player " + std::to_string(i + 1) + ": ";
-
-		if (m_binding_manager.IsPlayerBound(i))
+		// Clear and rebuild all slots
+		for (int i = 0; i < kMaxPlayers; ++i)
 		{
-			//If player is bound, show device name and change text color to green
-			auto device = m_binding_manager.GetPlayerDevice(i);
-			if (device.has_value())
-			{
-				statusText += InputDeviceDetector::GetDeviceDescription(device.value());
-				statusText += " [BOUND]";
-				m_player_status_text[i]->setFillColor(sf::Color::Green);
-				m_player_status_text[i]->setOutlineColor(sf::Color::Black);
-				m_player_status_text[i]->setOutlineThickness(2.f);
-			}
-		}
-		else
-		{
-			//Player is not bound, show waiting message and keep text color white
-			statusText += "Waiting for input...";
-			m_player_status_text[i]->setFillColor(sf::Color::White);
-			m_player_status_text[i]->setOutlineColor(sf::Color::Black);
-			m_player_status_text[i]->setOutlineThickness(2.f);
+			m_player_slots[i].Clear();
 		}
 
-		m_player_status_text[i]->setString(statusText);
-		m_player_status_text[i]->setOutlineColor(sf::Color::Black);
-		m_player_status_text[i]->setOutlineThickness(2.f);
+		// Reassign player IDs and update slots
+		for (size_t i = 0; i < m_joined_players.size(); ++i)
+		{
+			m_joined_players[i].playerId = static_cast<int>(i);
+			m_player_slots[i].SetPlayerInfo(static_cast<int>(i) + 1, m_joined_players[i].device);
+		}
 	}
-
-	UpdateInstructions();
 }
 
-//Checks if all players are bound and updates state
-void BindingState::CheckBindingComplete()
+int BindingState::GetJoinedPlayerCount() const
 {
-	if (m_binding_manager.IsBindingComplete())
-	{
-		m_all_players_bound = true;
-		GetContext().sounds->Play(SoundEffect::kCollectPickup);
-		std::cout << "[BindingState] All players bound! Ready to start game.\n";
-	}
+	return static_cast<int>(m_joined_players.size());
+}
+
+bool BindingState::CanAddMorePlayers() const
+{
+	return GetJoinedPlayerCount() < kMaxPlayers;
 }
