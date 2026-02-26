@@ -59,7 +59,7 @@ BindingState::BindingState(StateStack& stack, Context context)
 	// Initialize player slots
 	for (int i = 0; i < kMaxPlayers; ++i)
 	{
-		m_player_slots.emplace_back(*context.fonts);
+		m_player_slots.emplace_back(*context.fonts, *context.textures);
 
 		int row = i / kGridColumns;
 		int col = i % kGridColumns;
@@ -89,17 +89,22 @@ void BindingState::Draw()
 	if (m_instructions_text)
 		window.draw(*m_instructions_text);
 
-	// Draw all player slots in the grid
 	for (int i = 0; i < kMaxPlayers; ++i)
 	{
 		window.draw(m_player_slots[i]);
 	}
 
-	// Show ready text when we have players
+	//Show ready text when we have players
 	if (GetJoinedPlayerCount() >= 2 && m_ready_text)
 	{
-		std::string readyMsg = "Press ENTER to start (" + std::to_string(GetJoinedPlayerCount()) + " players)";
-		readyMsg += "\nPress ESC to clear all";
+		std::string hostDevice = "ENTER";
+		if (!m_joined_players.empty() && m_joined_players[0].device.type == InputDeviceType::kController)
+		{
+			hostDevice = "A button";
+		}
+
+		std::string readyMsg = "Player 1 press " + hostDevice + " to start (" + std::to_string(GetJoinedPlayerCount()) + " players)";
+		readyMsg += "\nKeyboard: Press key again to leave | Controller: B to leave";
 		m_ready_text->setString(readyMsg);
 		m_ready_text->setFillColor(sf::Color::Green);
 		Utility::CentreOrigin(*m_ready_text);
@@ -107,7 +112,7 @@ void BindingState::Draw()
 	}
 	else if (GetJoinedPlayerCount() == 1 && m_ready_text)
 	{
-		m_ready_text->setString("Need at least 2 players to start\nPress ESC to clear all");
+		m_ready_text->setString("Need at least 2 players to start\nKeyboard: Press key again to leave | Controller: B to leave");
 		m_ready_text->setFillColor(sf::Color::Yellow);
 		Utility::CentreOrigin(*m_ready_text);
 		window.draw(*m_ready_text);
@@ -117,19 +122,70 @@ void BindingState::Draw()
 bool BindingState::Update(sf::Time dt)
 {
 	m_elapsed_time += dt;
+	
+	//Update all player slot animations
+	for (auto& slot : m_player_slots)
+	{
+		slot.Update(dt);
+	}
+	
+	//Update instructions text based on player count
+	if (m_instructions_text)
+	{
+		if (GetJoinedPlayerCount() >= kMaxPlayers)
+		{
+			m_instructions_text->setString("Maximum players reached!");
+			m_instructions_text->setFillColor(sf::Color::Red);
+		}
+		else if (GetJoinedPlayerCount() > 0)
+		{
+			std::string msg = "Press any input to join (" + std::to_string(GetJoinedPlayerCount()) + "/" + std::to_string(kMaxPlayers) + ")";
+			m_instructions_text->setString(msg);
+			m_instructions_text->setFillColor(sf::Color::Cyan);
+		}
+		else
+		{
+			m_instructions_text->setString("Press any input to join");
+			m_instructions_text->setFillColor(sf::Color::Cyan);
+		}
+		Utility::CentreOrigin(*m_instructions_text);
+	}
+	
 	return true;
 }
 
 bool BindingState::HandleEvent(const sf::Event& event)
 {
-	//Check for ENTER to start game
-	if (const auto* keyPressed = event.getIf<sf::Event::KeyPressed>())
+	//Only Player 1 (host) can start the game with their device
+	if (GetJoinedPlayerCount() >= 2)
 	{
-		if (keyPressed->code == sf::Keyboard::Key::Enter)
+		if (!m_joined_players.empty())
 		{
-			if (GetJoinedPlayerCount() >= 2)
+			const auto& player1Device = m_joined_players[0].device;
+			bool isPlayer1Input = false;
+
+			if (const auto* keyPressed = event.getIf<sf::Event::KeyPressed>())
 			{
-				std::cout << "[BindingState] Starting game with " << GetJoinedPlayerCount() << " players:\n";
+				if (player1Device.type == InputDeviceType::kKeyboardMouse &&
+					keyPressed->code == sf::Keyboard::Key::Enter)
+				{
+					isPlayer1Input = true;
+				}
+			}
+
+			if (const auto* joyButtonPressed = event.getIf<sf::Event::JoystickButtonPressed>())
+			{
+				if (player1Device.type == InputDeviceType::kController &&
+					player1Device.deviceIndex == static_cast<int>(joyButtonPressed->joystickId) &&
+					joyButtonPressed->button == 0)
+				{
+					isPlayer1Input = true;
+				}
+			}
+
+			if (isPlayer1Input)
+			{
+				std::cout << "[BindingState] Host (Player 1) starting game with " << GetJoinedPlayerCount() << " players:\n";
 				GetContext().sounds->Play(SoundEffect::kStartGame);
 
 				//Save bindings to global config
@@ -148,21 +204,44 @@ bool BindingState::HandleEvent(const sf::Event& event)
 				RequestStackPush(StateID::kGame);
 				return false;
 			}
-			else
-			{
-				std::cout << "[BindingState] Need at least 2 players to start!\n";
-				GetContext().sounds->Play(SoundEffect::kError);
-			}
-			return false;
 		}
-		else if (keyPressed->code == sf::Keyboard::Key::Escape)
+	}
+
+	if (const auto* keyPressed = event.getIf<sf::Event::KeyPressed>())
+	{
+		if (keyPressed->code == sf::Keyboard::Key::Escape)
 		{
-			//ESC only goes back to menu if no players joined/are bound
 			if (GetJoinedPlayerCount() == 0)
 			{
 				GetContext().sounds->Play(SoundEffect::kButtonClick);
 				RequestStackPop();
 				RequestStackPush(StateID::kMenu);
+				return false;
+			}
+		}
+	}
+
+	if (const auto* joyButtonPressed = event.getIf<sf::Event::JoystickButtonPressed>())
+	{
+		if (joyButtonPressed->button == 1)
+		{
+			//Find player with this controller
+			int playerIndex = -1;
+			for (size_t i = 0; i < m_joined_players.size(); ++i)
+			{
+				if (m_joined_players[i].device.type == InputDeviceType::kController &&
+					m_joined_players[i].device.deviceIndex == static_cast<int>(joyButtonPressed->joystickId))
+				{
+					playerIndex = static_cast<int>(i);
+					break;
+				}
+			}
+
+			if (playerIndex >= 0)
+			{
+				std::cout << "[BindingState] Player " << (playerIndex + 1) << " left (B button)\n";
+				RemovePlayer(playerIndex);
+				GetContext().sounds->Play(SoundEffect::kError);
 				return false;
 			}
 		}
@@ -187,9 +266,12 @@ bool BindingState::HandleEvent(const sf::Event& event)
 
 			if (existingPlayerIndex >= 0)
 			{
-				std::cout << "[BindingState] Player " << (existingPlayerIndex + 1) << " left\n";
-				RemovePlayer(existingPlayerIndex);
-				GetContext().sounds->Play(SoundEffect::kError);
+				if (device->type != InputDeviceType::kController)
+				{
+					std::cout << "[BindingState] Player " << (existingPlayerIndex + 1) << " left\n";
+					RemovePlayer(existingPlayerIndex);
+					GetContext().sounds->Play(SoundEffect::kError);
+				}
 			}
 			else if (CanAddMorePlayers())
 			{

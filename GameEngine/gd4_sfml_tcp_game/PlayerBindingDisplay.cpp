@@ -1,29 +1,40 @@
 #include "PlayerBindingDisplay.hpp"
 #include "Utility.hpp"
 #include "ResourceHolder.hpp"
+#include "Animation.hpp"
 #include <SFML/Graphics/RenderTarget.hpp>
 
-PlayerBindingDisplay::PlayerBindingDisplay(FontHolder& fonts)
+PlayerBindingDisplay::PlayerBindingDisplay(FontHolder& fonts, TextureHolder& textures)
 	: m_fonts(fonts)
+	, m_textures(textures)
 	, m_position(0.f, 0.f)
 	, m_size(200.f, 150.f)
 	, m_player_number(-1)
 	, m_player_color(sf::Color::White)
 	, m_is_ready(false)
 	, m_is_occupied(false)
+	, m_player_idle_animation(textures.Get(TextureID::kPlayer1Animations))
 {
-	//Setup background
 	m_background.setFillColor(sf::Color(50, 50, 50, 200));
 	m_background.setOutlineColor(sf::Color(100, 100, 100));
 	m_background.setOutlineThickness(2.f);
 
-	//Setup sprite preview background
-	m_sprite_preview_bg.setSize({ 60.f, 60.f });
-	m_sprite_preview_bg.setFillColor(sf::Color(30, 30, 30));
-	m_sprite_preview_bg.setOutlineColor(sf::Color::White);
-	m_sprite_preview_bg.setOutlineThickness(1.f);
+	//Configure idle animation
+	m_player_idle_animation.SetFrameSize(sf::Vector2i(16, 21));
+	m_player_idle_animation.SetNumFrames(4);
+	m_player_idle_animation.SetDuration(sf::seconds(0.5f));
+	m_player_idle_animation.SetRepeating(true);
+	Utility::CentreOrigin(m_player_idle_animation);
 
 	UpdateLayout();
+}
+
+void PlayerBindingDisplay::Update(sf::Time dt)
+{
+	if (m_is_occupied)
+	{
+		m_player_idle_animation.Update(dt);
+	}
 }
 
 void PlayerBindingDisplay::SetPosition(const sf::Vector2f& position)
@@ -64,7 +75,7 @@ void PlayerBindingDisplay::SetPlayerInfo(int playerNumber, const InputDeviceInfo
 void PlayerBindingDisplay::SetPlayerColor(const sf::Color& color)
 {
 	m_player_color = color;
-	m_sprite_preview_bg.setFillColor(color);
+	m_player_idle_animation.SetColor(color);
 }
 
 void PlayerBindingDisplay::SetReady(bool ready)
@@ -118,10 +129,11 @@ void PlayerBindingDisplay::UpdateLayout()
 	m_background.setSize(m_size);
 
 	sf::Vector2f spritePreviewPos = m_position + sf::Vector2f(
-		(m_size.x - m_sprite_preview_bg.getSize().x) / 2.f,
-		10.f
+		m_size.x / 2.f,
+		45.f
 	);
-	m_sprite_preview_bg.setPosition(spritePreviewPos);
+	m_sprite_preview_bg.setPosition(spritePreviewPos - sf::Vector2f(32.f, 32.f));
+	m_player_idle_animation.setPosition(spritePreviewPos);
 
 	if (m_player_number_text)
 	{
@@ -153,12 +165,11 @@ void PlayerBindingDisplay::UpdateLayout()
 
 void PlayerBindingDisplay::draw(sf::RenderTarget& target, sf::RenderStates states) const
 {
-	//Only draw if this slot is occupied by a player
 	if (!m_is_occupied)
 		return;
 
 	target.draw(m_background, states);
-	target.draw(m_sprite_preview_bg, states);
+	target.draw(m_player_idle_animation, states);
 
 	if (m_player_number_text)
 		target.draw(*m_player_number_text, states);

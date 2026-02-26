@@ -6,6 +6,7 @@
 #include <SFML/Graphics/Sprite.hpp>
 #include "ResourceIdentifiers.hpp"
 #include "InputDevice.hpp"
+#include "Animation.hpp"
 #include <optional>
 
 /*
@@ -15,7 +16,7 @@
 class PlayerBindingDisplay : public sf::Drawable
 {
 public:
-	PlayerBindingDisplay(FontHolder& fonts);
+	PlayerBindingDisplay(FontHolder& fonts, TextureHolder& textures);
 
 	void SetPosition(const sf::Vector2f& position);
 	void SetSize(const sf::Vector2f& size);
@@ -29,12 +30,18 @@ public:
 	bool IsOccupied() const;
 	sf::FloatRect GetBounds() const;
 
+	void Update(sf::Time dt);
+
 private:
 	void draw(sf::RenderTarget& target, sf::RenderStates states) const override;
 	void UpdateLayout();
 
 private:
 	FontHolder& m_fonts;
+
+	TextureHolder& m_textures;
+	Animation m_player_idle_animation;
+	sf::Time m_animation_time;
 
 	sf::Vector2f m_position;
 	sf::Vector2f m_size;

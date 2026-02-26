@@ -24,7 +24,8 @@ private:
 	bool CanAddMorePlayers() const;
 
 private:
-	static constexpr int kMaxPlayers = 2;
+	static constexpr int kMaxPlayers = 20;
+	TextureHolder m_textures;
 
 	sf::Sprite m_background_sprite;
 	std::optional<sf::Text> m_title_text;
