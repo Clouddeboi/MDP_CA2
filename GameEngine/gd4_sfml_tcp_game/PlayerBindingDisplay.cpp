@@ -24,6 +24,7 @@ PlayerBindingDisplay::PlayerBindingDisplay(FontHolder& fonts, TextureHolder& tex
 	m_player_idle_animation.SetNumFrames(4);
 	m_player_idle_animation.SetDuration(sf::seconds(0.5f));
 	m_player_idle_animation.SetRepeating(true);
+	m_player_idle_animation.setScale({ 1.4f, 1.4f });
 	Utility::CentreOrigin(m_player_idle_animation);
 
 	UpdateLayout();
@@ -84,18 +85,27 @@ void PlayerBindingDisplay::SetReady(bool ready)
 
 	if (ready)
 	{
-		m_ready_indicator.emplace(m_fonts.Get(Font::kMain), "READY", 18);
+		m_ready_indicator.emplace(m_fonts.Get(Font::kMain), "READY");
+		m_ready_indicator->setCharacterSize(16);
 		m_ready_indicator->setFillColor(sf::Color::Green);
 		m_ready_indicator->setOutlineColor(sf::Color::Black);
 		m_ready_indicator->setOutlineThickness(2.f);
 		m_background.setOutlineColor(sf::Color::Green);
 		m_background.setOutlineThickness(3.f);
+
+		//Add a green box indicator under device text
+		m_sprite_preview_bg.setFillColor(sf::Color::Green);
+		m_sprite_preview_bg.setSize({ 80.f, 20.f });
 	}
 	else
 	{
 		m_ready_indicator.reset();
 		m_background.setOutlineColor(sf::Color(100, 100, 100));
 		m_background.setOutlineThickness(2.f);
+
+		//Hide the green box
+		m_sprite_preview_bg.setFillColor(sf::Color::Transparent);
+		m_sprite_preview_bg.setSize({ 64.f, 64.f });
 	}
 
 	UpdateLayout();
@@ -132,8 +142,16 @@ void PlayerBindingDisplay::UpdateLayout()
 		m_size.x / 2.f,
 		45.f
 	);
-	m_sprite_preview_bg.setPosition(spritePreviewPos - sf::Vector2f(32.f, 32.f));
+
 	m_player_idle_animation.setPosition(spritePreviewPos);
+
+	if (m_is_ready)
+	{
+		m_sprite_preview_bg.setPosition({
+			m_position.x + (m_size.x - m_sprite_preview_bg.getSize().x) / 2.f,
+			m_position.y + 120.f
+			});
+	}
 
 	if (m_player_number_text)
 	{
@@ -171,6 +189,11 @@ void PlayerBindingDisplay::draw(sf::RenderTarget& target, sf::RenderStates state
 	target.draw(m_background, states);
 	target.draw(m_player_idle_animation, states);
 
+	if (m_is_ready)
+	{
+		target.draw(m_sprite_preview_bg, states);
+	}
+
 	if (m_player_number_text)
 		target.draw(*m_player_number_text, states);
 
@@ -179,4 +202,9 @@ void PlayerBindingDisplay::draw(sf::RenderTarget& target, sf::RenderStates state
 
 	if (m_ready_indicator)
 		target.draw(*m_ready_indicator, states);
+}
+
+bool PlayerBindingDisplay::IsReady() const
+{
+	return m_is_ready;
 }

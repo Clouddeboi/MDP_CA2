@@ -31,6 +31,7 @@ public:
 	sf::FloatRect GetBounds() const;
 
 	void Update(sf::Time dt);
+	bool IsReady() const;
 
 private:
 	void draw(sf::RenderTarget& target, sf::RenderStates states) const override;

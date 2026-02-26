@@ -22,6 +22,7 @@ private:
 	void RemovePlayer(int index);
 	int GetJoinedPlayerCount() const;
 	bool CanAddMorePlayers() const;
+	bool AreAllPlayersReady() const;
 
 private:
 	static constexpr int kMaxPlayers = 20;
