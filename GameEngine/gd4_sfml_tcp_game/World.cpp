@@ -722,8 +722,10 @@ void World::LoadTextures()
 	m_textures.Load(TextureID::kPlatform, "Media/Textures/stone_tile.png");
 	m_textures.Load(TextureID::kBox, "Media/Textures/crate_tile.png");
 
-	m_textures.Load(TextureID::kPlayer1Animations, "Media/Textures/Player_Yellow_AnimSheet.png");
-	m_textures.Load(TextureID::kPlayer2Animations, "Media/Textures/Player_Red_AnimSheet.png");
+	m_textures.Load(TextureID::kPlayer1Animations, "Media/Textures/Player/Wizard_M_Run_Spritesheet.png");
+	m_textures.Load(TextureID::kPlayer2Animations, "Media/Textures/Player/Wizard_M_Run_Spritesheet.png");
+
+	m_textures.Load(TextureID::kPlayerGrayscale, "Media/Textures/Player/Wizard_M_Jump.png");
 
 }
 
@@ -785,15 +787,33 @@ void World::BuildScene()
 		});
 	m_scene_layers[static_cast<int>(SceneLayers::kBackground)]->AttachChild(std::move(background_sprite));
 
-	//Create players based on configured player count
+	std::vector<sf::Color> default_player_colors = {
+	sf::Color::Red,
+	sf::Color::Yellow,
+	sf::Color::Blue,
+	sf::Color::Green,
+	sf::Color::Magenta,
+	sf::Color::Cyan
+	};
+
 	for (int i = 0; i < m_player_count; ++i)
 	{
-		AircraftType player_type = (i == 0) ? AircraftType::kEagle :
-			(i == 1) ? AircraftType::kEaglePlayer2 :
-			AircraftType::kEagle;
+		//Use grayscale texture for all players now
+		AircraftType player_type = AircraftType::kEagle;
 
 		std::unique_ptr<Aircraft> player(new Aircraft(player_type, m_textures, m_fonts, i));
 		Aircraft* player_aircraft = player.get();
+
+		//Set player color
+		if (i < static_cast<int>(default_player_colors.size()))
+		{
+			player_aircraft->SetPlayerColor(default_player_colors[i]);
+		}
+		else
+		{
+			//Fallback color for any extra players beyond 20
+			player_aircraft->SetPlayerColor(sf::Color::White);
+		}
 
 		if (i < static_cast<int>(m_player_spawn_positions.size()))
 		{

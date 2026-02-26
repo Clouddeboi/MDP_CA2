@@ -89,6 +89,8 @@ Aircraft::Aircraft(AircraftType type, const TextureHolder& textures, const FontH
 	, m_facing_right(true)
 	, m_dust_emitter(nullptr)
 	, m_is_emitting_dust(false)
+	, m_player_color(sf::Color::White)
+	, m_using_color_tint(false)
 
 {
 	m_explosion.SetFrameSize(sf::Vector2i(256, 256));
@@ -114,14 +116,14 @@ Aircraft::Aircraft(AircraftType type, const TextureHolder& textures, const FontH
 		TextureID anim_texture = (m_player_id == 0) ? TextureID::kPlayer1Animations : TextureID::kPlayer2Animations;
 
 		m_idle_animation.SetTexture(textures.Get(anim_texture));
-		m_idle_animation.SetFrameSize(sf::Vector2i(64, 64));
+		m_idle_animation.SetFrameSize(sf::Vector2i(16, 21));
 		m_idle_animation.SetNumFrames(4);
 		m_idle_animation.SetDuration(sf::seconds(0.5f));
 		m_idle_animation.SetRepeating(true);
 		Utility::CentreOrigin(m_idle_animation);
 
 		m_run_animation.SetTexture(textures.Get(anim_texture));
-		m_run_animation.SetFrameSize(sf::Vector2i(64, 64));
+		m_run_animation.SetFrameSize(sf::Vector2i(16, 21));
 		m_run_animation.SetNumFrames(4);
 		m_run_animation.SetDuration(sf::seconds(0.8f));
 		m_run_animation.SetRepeating(true);
@@ -858,4 +860,26 @@ void Aircraft::SetOnGround(bool grounded)
 bool Aircraft::IsOnGround() const
 {
 	return m_is_on_ground;
+}
+
+
+void Aircraft::SetPlayerColor(const sf::Color& color)
+{
+	m_player_color = color;
+	m_using_color_tint = true;
+
+	//Apply color tint to sprite
+	m_sprite.setColor(color);
+
+	//Apply color tint to animations if using them
+	if (m_use_animations)
+	{
+		m_idle_animation.SetColor(color);
+		m_run_animation.SetColor(color);
+	}
+}
+
+sf::Color Aircraft::GetPlayerColor() const
+{
+	return m_player_color;
 }

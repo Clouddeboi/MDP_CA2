@@ -1,4 +1,4 @@
-#include "animation.hpp"
+#include "Animation.hpp"
 #include <SFML/Graphics/Texture.hpp>
 #include <SFML/Graphics/RenderTarget.hpp>
 
@@ -133,4 +133,14 @@ void Animation::draw(sf::RenderTarget& target, sf::RenderStates states) const
 {
     states.transform *= getTransform();
     target.draw(m_sprite, states);
+}
+
+void Animation::SetColor(const sf::Color& color)
+{
+    m_sprite.setColor(color);
+}
+
+sf::Color Animation::GetColor() const
+{
+    return m_sprite.getColor();
 }

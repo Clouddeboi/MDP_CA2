@@ -55,6 +55,9 @@ public:
 	void SetGunOffset(const sf::Vector2f & offset);
 	sf::Vector2f GetGunOffset() const;
 
+	void SetPlayerColor(const sf::Color& color);
+	sf::Color GetPlayerColor() const;
+
 private:
 	virtual void DrawCurrent(sf::RenderTarget& target, sf::RenderStates states) const;
 	virtual void UpdateCurrent(sf::Time dt, CommandQueue& commands) override;
@@ -138,5 +141,8 @@ private:
 	unsigned int m_base_fire_rate;
 	unsigned int m_base_spread_level;
 	float m_damage_multiplier;
+
+	sf::Color m_player_color;
+	bool m_using_color_tint;
 };
 

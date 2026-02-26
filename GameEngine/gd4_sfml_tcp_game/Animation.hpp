@@ -32,6 +32,9 @@ public:
 
 	void Update(sf::Time dt);
 
+	void SetColor(const sf::Color& color);
+	sf::Color GetColor() const;
+
 private:
 	void draw(sf::RenderTarget& target, sf::RenderStates states) const override;
 
@@ -43,5 +46,4 @@ private:
 	sf::Time m_duration;
 	sf::Time m_elapsed_time;
 	bool m_repeat;
-
 };

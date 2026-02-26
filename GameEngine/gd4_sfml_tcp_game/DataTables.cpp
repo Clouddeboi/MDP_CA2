@@ -14,7 +14,7 @@ std::vector<AircraftData> InitializeAircraftData()
     data[static_cast<int>(AircraftType::kEagle)].m_speed = 250.f;
     data[static_cast<int>(AircraftType::kEagle)].m_fire_interval = sf::seconds(1);
     data[static_cast<int>(AircraftType::kEagle)].m_texture = TextureID::kEntities;
-    data[static_cast<int>(AircraftType::kEagle)].m_texture_rect = sf::IntRect({ 576, 320 }, { 64, 64 });
+    data[static_cast<int>(AircraftType::kEagle)].m_texture_rect = sf::IntRect({ 576, 320 }, { 16, 21 });
     data[static_cast<int>(AircraftType::kEagle)].m_has_roll_animation = true;
     data[static_cast<int>(AircraftType::kEagle)].m_has_gun = true;
     data[static_cast<int>(AircraftType::kEagle)].m_gun_texture = TextureID::kEntities;
@@ -26,7 +26,7 @@ std::vector<AircraftData> InitializeAircraftData()
     data[static_cast<int>(AircraftType::kEaglePlayer2)].m_speed = 250.f;
     data[static_cast<int>(AircraftType::kEaglePlayer2)].m_fire_interval = sf::seconds(1);
     data[static_cast<int>(AircraftType::kEaglePlayer2)].m_texture = TextureID::kEntities;
-    data[static_cast<int>(AircraftType::kEaglePlayer2)].m_texture_rect = sf::IntRect({ 576, 256 }, { 64, 64 });
+    data[static_cast<int>(AircraftType::kEaglePlayer2)].m_texture_rect = sf::IntRect({ 576, 256 }, { 16, 21 });
     data[static_cast<int>(AircraftType::kEaglePlayer2)].m_has_roll_animation = true;
     data[static_cast<int>(AircraftType::kEaglePlayer2)].m_has_gun = true;
     data[static_cast<int>(AircraftType::kEaglePlayer2)].m_gun_texture = TextureID::kEntities;
