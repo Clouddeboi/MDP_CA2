@@ -44,4 +44,7 @@ private:
 	static constexpr int kGridColumns = 4;
 	static constexpr int kGridRows = 5;
 	std::vector<PlayerBindingDisplay> m_player_slots;
+
+	std::vector<sf::Color> m_all_colors;
+	std::vector<bool> m_color_taken;
 };

@@ -33,6 +33,17 @@ public:
 	void Update(sf::Time dt);
 	bool IsReady() const;
 
+	void ShowColorPicker(bool show);
+	bool IsShowingColorPicker() const;
+	void SetAvailableColors(const std::vector<sf::Color>& colors);
+	int GetColorIndexAtPosition(const sf::Vector2f& mousePos) const;
+	void SelectColorAtIndex(int index);
+	int GetSelectedColorIndex() const;
+	void NavigateColorGrid(int deltaX, int deltaY);
+	int GetCurrentColorCursor() const;
+	void ConfirmColorSelection();
+	void UpdateColorCursorHighlight();
+
 private:
 	void draw(sf::RenderTarget& target, sf::RenderStates states) const override;
 	void UpdateLayout();
@@ -58,4 +69,14 @@ private:
 	sf::Color m_player_color;
 	bool m_is_ready;
 	bool m_is_occupied;
+
+	bool m_showing_color_picker;
+	int m_selected_color_index;
+	std::vector<sf::Color> m_available_colors;
+	std::vector<sf::RectangleShape> m_color_boxes;
+	static constexpr int kColorGridColumns = 5;
+	static constexpr int kColorGridRows = 4;
+	static constexpr float kColorBoxSize = 20.f;
+	static constexpr float kColorBoxSpacing = 22.f;
+	int m_current_color_cursor;
 };
