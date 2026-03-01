@@ -6,6 +6,7 @@
 #include "Command.hpp"
 #include "Platform.hpp"
 #include "Box.hpp"
+#include "PlayerBindingConfig.hpp"
 #include <iostream>
 #include <ctime>  
 
@@ -798,21 +799,28 @@ void World::BuildScene()
 
 	for (int i = 0; i < m_player_count; ++i)
 	{
-		//Use grayscale texture for all players now
 		AircraftType player_type = AircraftType::kEagle;
 
 		std::unique_ptr<Aircraft> player(new Aircraft(player_type, m_textures, m_fonts, i));
 		Aircraft* player_aircraft = player.get();
 
-		//Set player color
-		if (i < static_cast<int>(default_player_colors.size()))
+		//Apply player color from config
+		auto& config = PlayerBindingConfig::GetInstance();
+		auto playerColor = config.GetPlayerColor(i);
+		if (playerColor.has_value())
 		{
-			player_aircraft->SetPlayerColor(default_player_colors[i]);
+			player_aircraft->SetPlayerColor(playerColor.value());
 		}
 		else
 		{
-			//Fallback color for any extra players beyond 20
-			player_aircraft->SetPlayerColor(sf::Color::White);
+			//Fallback to default colors
+			std::vector<sf::Color> default_colors = {
+				sf::Color::Red, sf::Color::Yellow, sf::Color::Blue, sf::Color::Green,
+			};
+			if (i < static_cast<int>(default_colors.size()))
+			{
+				player_aircraft->SetPlayerColor(default_colors[i]);
+			}
 		}
 
 		if (i < static_cast<int>(m_player_spawn_positions.size()))
@@ -821,7 +829,6 @@ void World::BuildScene()
 		}
 		else
 		{
-			//Fallback if spawn positions weren't generated properly
 			player_aircraft->setPosition({ 200.f + (i * 100.f), 0.f });
 		}
 

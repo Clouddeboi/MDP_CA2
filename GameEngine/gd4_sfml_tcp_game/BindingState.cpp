@@ -256,7 +256,7 @@ bool BindingState::HandleEvent(const sf::Event& event)
 
 			if (isPlayer1Start)
 			{
-				std::cout << "[BindingState] Host starting game with " << GetJoinedPlayerCount() << " players\n";
+				std::cout << "[BindingState] Host starting game with " << GetJoinedPlayerCount() << " players:\n";
 				GetContext().sounds->Play(SoundEffect::kStartGame);
 
 				auto& config = PlayerBindingConfig::GetInstance();
@@ -265,6 +265,15 @@ bool BindingState::HandleEvent(const sf::Event& event)
 				for (size_t i = 0; i < m_joined_players.size(); ++i)
 				{
 					config.SetPlayerDevice(static_cast<int>(i), m_joined_players[i].device);
+
+					int colorIndex = m_player_slots[i].GetSelectedColorIndex();
+					if (colorIndex >= 0 && colorIndex < static_cast<int>(m_all_colors.size()))
+					{
+						config.SetPlayerColor(static_cast<int>(i), m_all_colors[colorIndex]);
+					}
+
+					std::cout << "  Player " << (i + 1) << " -> "
+						<< InputDeviceDetector::GetDeviceDescription(m_joined_players[i].device) << "\n";
 				}
 
 				RequestStackPop();

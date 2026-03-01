@@ -42,6 +42,11 @@ public:
 		{
 			device.reset();
 		}
+		for (auto& color : m_player_colors)
+		{
+			color.reset();
+		}
+		m_player_count = 2;
 	}
 
 	bool HasBindings() const
@@ -59,9 +64,27 @@ public:
 		m_player_count = count;
 	}
 
+	void SetPlayerColor(int playerId, const sf::Color& color)
+	{
+		if (playerId >= 0 && playerId < kMaxPlayers)
+		{
+			m_player_colors[playerId] = color;
+		}
+	}
+
+	std::optional<sf::Color> GetPlayerColor(int playerId) const
+	{
+		if (playerId >= 0 && playerId < kMaxPlayers)
+		{
+			return m_player_colors[playerId];
+		}
+		return std::nullopt;
+	}
+
 private:
 	static constexpr int kMaxPlayers = 2;
 	std::array<std::optional<InputDeviceInfo>, kMaxPlayers> m_player_devices;
+	std::array<std::optional<sf::Color>, kMaxPlayers> m_player_colors;
 	int m_player_count = 2;
 
 	PlayerBindingConfig() = default;
