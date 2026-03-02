@@ -317,7 +317,11 @@ bool BindingState::HandleEvent(const sf::Event& event)
 		if (keyPressed->code == sf::Keyboard::Key::W ||
 			keyPressed->code == sf::Keyboard::Key::A ||
 			keyPressed->code == sf::Keyboard::Key::S ||
-			keyPressed->code == sf::Keyboard::Key::D)
+			keyPressed->code == sf::Keyboard::Key::D ||
+			keyPressed->code == sf::Keyboard::Key::Up ||
+			keyPressed->code == sf::Keyboard::Key::Down ||
+			keyPressed->code == sf::Keyboard::Key::Left ||
+			keyPressed->code == sf::Keyboard::Key::Right)
 		{
 			for (size_t i = 0; i < m_joined_players.size(); ++i)
 			{
@@ -330,6 +334,12 @@ bool BindingState::HandleEvent(const sf::Event& event)
 						if (keyPressed->code == sf::Keyboard::Key::S) deltaY = 1;
 						if (keyPressed->code == sf::Keyboard::Key::A) deltaX = -1;
 						if (keyPressed->code == sf::Keyboard::Key::D) deltaX = 1;
+
+						if (keyPressed->code == sf::Keyboard::Key::Up) deltaY = -1;
+						if (keyPressed->code == sf::Keyboard::Key::Down) deltaY = 1;
+						if (keyPressed->code == sf::Keyboard::Key::Left) deltaX = -1;
+						if (keyPressed->code == sf::Keyboard::Key::Right) deltaX = 1;
+
 
 						m_player_slots[i].NavigateColorGrid(deltaX, deltaY);
 						GetContext().sounds->Play(SoundEffect::kButtonClick);
@@ -359,6 +369,12 @@ bool BindingState::HandleEvent(const sf::Event& event)
 						//Toggle ready if already selected color
 						bool currentReady = m_player_slots[i].IsReady();
 						m_player_slots[i].SetReady(!currentReady);
+
+						if (currentReady)
+						{
+							m_player_slots[i].ShowColorPicker(true);
+						}
+
 						GetContext().sounds->Play(SoundEffect::kButtonClick);
 						std::cout << "[BindingState] Player " << (i + 1) << (currentReady ? " unready" : " ready") << "\n";
 						return false;
@@ -377,6 +393,12 @@ bool BindingState::HandleEvent(const sf::Event& event)
 					{
 						bool currentReady = m_player_slots[i].IsReady();
 						m_player_slots[i].SetReady(!currentReady);
+
+						if (currentReady)
+						{
+							m_player_slots[i].ShowColorPicker(true);
+						}
+
 						GetContext().sounds->Play(SoundEffect::kButtonClick);
 						std::cout << "[BindingState] Player " << (i + 1) << (currentReady ? " unready" : " ready") << "\n";
 						return false;
@@ -482,6 +504,12 @@ bool BindingState::HandleEvent(const sf::Event& event)
 						//Toggle ready state if already has color
 						bool currentReady = m_player_slots[i].IsReady();
 						m_player_slots[i].SetReady(!currentReady);
+
+						if (currentReady)
+						{
+							m_player_slots[i].ShowColorPicker(true);
+						}
+
 						GetContext().sounds->Play(SoundEffect::kButtonClick);
 						std::cout << "[BindingState] Player " << (i + 1) << (currentReady ? " unready" : " ready") << "\n";
 					}
