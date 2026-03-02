@@ -163,11 +163,11 @@ private:
 	float m_current_zoom_level;
 	sf::View m_saved_camera_state;
 	bool m_camera_state_saved;
-	const float m_min_zoom = 1.0f;
-	const float m_max_zoom = 1.35f;
-	const float m_zoom_speed = 0.5f;
+	const float m_min_zoom = 0.5f;
+	const float m_max_zoom = 2.2f;
+	const float m_zoom_speed = 1.0f;
 	const float m_min_player_distance = 400.f;
-	const float m_max_player_distance = 900.f;
+	const float m_max_player_distance = 2550.f;
 
 	sf::FloatRect m_camera_play_bounds;
 };

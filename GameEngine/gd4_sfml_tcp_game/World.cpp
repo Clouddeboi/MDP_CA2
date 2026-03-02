@@ -30,7 +30,7 @@ World::World(sf::RenderTarget& output_target, FontHolder& font, SoundPlayer& sou
 	,m_sounds(sounds)
 	,m_scenegraph(ReceiverCategories::kNone)
 	,m_scene_layers()
-	,m_world_bounds({ 0.f,0.f }, { 1280.f, 1280.f })
+	,m_world_bounds({ 0.f,0.f }, { 2400.f, 1250.f })
 	,m_spawn_position(m_world_bounds.size.x / 2.f, m_world_bounds.size.y - 300.f)
 	,m_scrollspeed(0.f)//Setting it to 0 since we don't want our players to move up automatically
 	,m_scene_texture({ m_target.getSize().x, m_target.getSize().y })
@@ -54,7 +54,7 @@ World::World(sf::RenderTarget& output_target, FontHolder& font, SoundPlayer& sou
 	,m_pickup_spawn_interval(sf::seconds(5.f))
 	,m_current_zoom_level(1.0f)
 	,m_camera_state_saved(false)
-	,m_camera_play_bounds({ 50.f, 50.f }, { 1240.f, 1240.f })
+	,m_camera_play_bounds({ 50.f, 50.f }, { 2400.f, 1250.f })
 {
 	std::srand(static_cast<unsigned int>(std::time(nullptr)));
 
@@ -234,11 +234,11 @@ void World::UpdateCameraZoom(sf::Time dt)
 	if (alive_players.size() == 1)
 	{
 		camera_target = alive_players[0]->getPosition();
-		target_zoom = m_max_zoom;
+		target_zoom = m_min_zoom;
 	}
 	else
 	{
-		//Multiple players alive, calculate midpoint and dynamic zoom
+		//Multiple players alive, calculate midpoint
 		sf::Vector2f sum_positions(0.f, 0.f);
 		for (Aircraft* player : alive_players)
 		{
@@ -248,20 +248,40 @@ void World::UpdateCameraZoom(sf::Time dt)
 
 		if (alive_players.size() >= 2)
 		{
-			sf::Vector2f player1_pos = alive_players[0]->getPosition();
-			sf::Vector2f player2_pos = alive_players[1]->getPosition();
+			//Calculate bounding box of all players
+			float min_x = alive_players[0]->getPosition().x;
+			float max_x = alive_players[0]->getPosition().x;
+			float min_y = alive_players[0]->getPosition().y;
+			float max_y = alive_players[0]->getPosition().y;
 
-			sf::Vector2f diff = player2_pos - player1_pos;
-			float distance = std::sqrt(diff.x * diff.x + diff.y * diff.y);
+			for (size_t i = 1; i < alive_players.size(); ++i)
+			{
+				sf::Vector2f pos = alive_players[i]->getPosition();
+				min_x = std::min(min_x, pos.x);
+				max_x = std::max(max_x, pos.x);
+				min_y = std::min(min_y, pos.y);
+				max_y = std::max(max_y, pos.y);
+			}
 
-			float normalized_distance = (distance - m_min_player_distance) / (m_max_player_distance - m_min_player_distance);
-			normalized_distance = std::max(0.f, std::min(1.f, normalized_distance));
+			//Add padding around players
+			const float padding = 200.f;
+			float required_width = (max_x - min_x) + (padding * 2.f);
+			float required_height = (max_y - min_y) + (padding * 2.f);
 
-			target_zoom = m_max_zoom - (normalized_distance * (m_max_zoom - m_min_zoom));
+			//Calculate zoom needed to fit this area
+			sf::Vector2f view_size = m_target.getDefaultView().getSize();
+
+			//Calculate zoom factors needed for width and height
+			float zoom_for_width = required_width / view_size.x;
+			float zoom_for_height = required_height / view_size.y;
+
+			//Use the larger zoom to ensure both dimensions fit
+			target_zoom = std::max(zoom_for_width, zoom_for_height);
+			target_zoom = std::max(m_min_zoom, std::min(target_zoom, m_max_zoom));
 		}
 		else
 		{
-			target_zoom = m_max_zoom;
+			target_zoom = m_min_zoom;
 		}
 	}
 
