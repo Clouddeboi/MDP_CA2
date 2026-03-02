@@ -256,6 +256,7 @@ void PlayerBindingDisplay::SetAvailableColors(const std::vector<sf::Color>& colo
 {
 	m_available_colors = colors;
 	m_color_boxes.clear();
+	m_color_unavailable.clear();
 	m_current_color_cursor = 0;
 
 	//Create color box rectangles
@@ -267,6 +268,7 @@ void PlayerBindingDisplay::SetAvailableColors(const std::vector<sf::Color>& colo
 		box.setOutlineColor(sf::Color::White);
 		box.setOutlineThickness(1.f);
 		m_color_boxes.push_back(box);
+		m_color_unavailable.push_back(false);
 	}
 
 	UpdateColorCursorHighlight();
@@ -308,22 +310,35 @@ void PlayerBindingDisplay::NavigateColorGrid(int deltaX, int deltaY)
 	if (!m_showing_color_picker || m_color_boxes.empty())
 		return;
 
-	int currentRow = m_current_color_cursor / kColorGridColumns;
-	int currentCol = m_current_color_cursor % kColorGridColumns;
+	int attempts = 0;
+	int maxAttempts = 20; //Prevent infinite loop
 
-	currentCol += deltaX;
-	currentRow += deltaY;
+	do
+	{
+		int currentRow = m_current_color_cursor / kColorGridColumns;
+		int currentCol = m_current_color_cursor % kColorGridColumns;
 
-	//Wrap around
-	if (currentCol < 0) currentCol = kColorGridColumns - 1;
-	if (currentCol >= kColorGridColumns) currentCol = 0;
-	if (currentRow < 0) currentRow = kColorGridRows - 1;
-	if (currentRow >= kColorGridRows) currentRow = 0;
+		currentCol += deltaX;
+		currentRow += deltaY;
 
-	m_current_color_cursor = currentRow * kColorGridColumns + currentCol;
+		//Wrap around
+		if (currentCol < 0) currentCol = kColorGridColumns - 1;
+		if (currentCol >= kColorGridColumns) currentCol = 0;
+		if (currentRow < 0) currentRow = kColorGridRows - 1;
+		if (currentRow >= kColorGridRows) currentRow = 0;
 
-	if (m_current_color_cursor >= static_cast<int>(m_color_boxes.size()))
-		m_current_color_cursor = static_cast<int>(m_color_boxes.size()) - 1;
+		m_current_color_cursor = currentRow * kColorGridColumns + currentCol;
+
+		//Clamp to available colors
+		if (m_current_color_cursor >= static_cast<int>(m_color_boxes.size()))
+			m_current_color_cursor = static_cast<int>(m_color_boxes.size()) - 1;
+
+		attempts++;
+
+		//Keep moving if this color is unavailable
+	} while (m_current_color_cursor < static_cast<int>(m_color_unavailable.size()) &&
+		m_color_unavailable[m_current_color_cursor] &&
+		attempts < maxAttempts);
 
 	UpdateColorCursorHighlight();
 }
@@ -348,20 +363,47 @@ void PlayerBindingDisplay::UpdateColorCursorHighlight()
 	//Update visual highlight for cursor position
 	for (size_t i = 0; i < m_color_boxes.size(); ++i)
 	{
-		if (static_cast<int>(i) == m_current_color_cursor)
+		if (i < m_color_unavailable.size() && m_color_unavailable[i])
 		{
+			//Unavailable: darken and red outline
+			sf::Color dimmedColor = m_color_boxes[i].getFillColor();
+			dimmedColor.a = 100;//Semi-transparent
+			m_color_boxes[i].setFillColor(dimmedColor);
+			m_color_boxes[i].setOutlineColor(sf::Color(100, 100, 100));
+			m_color_boxes[i].setOutlineThickness(1.f);
+		}
+		else if (static_cast<int>(i) == m_current_color_cursor)
+		{
+			sf::Color fullColor = m_available_colors[i];
+			fullColor.a = 255;
+			m_color_boxes[i].setFillColor(fullColor);
 			m_color_boxes[i].setOutlineColor(sf::Color::White);
 			m_color_boxes[i].setOutlineThickness(3.f);
 		}
 		else if (static_cast<int>(i) == m_selected_color_index)
 		{
+			sf::Color fullColor = m_available_colors[i];
+			fullColor.a = 255;
+			m_color_boxes[i].setFillColor(fullColor);
 			m_color_boxes[i].setOutlineColor(sf::Color::Yellow);
 			m_color_boxes[i].setOutlineThickness(2.f);
 		}
 		else
 		{
+			sf::Color fullColor = m_available_colors[i];
+			fullColor.a = 255;
+			m_color_boxes[i].setFillColor(fullColor);
 			m_color_boxes[i].setOutlineColor(sf::Color::White);
 			m_color_boxes[i].setOutlineThickness(1.f);
 		}
+	}
+}
+
+void PlayerBindingDisplay::MarkColorAsUnavailable(int colorIndex, bool unavailable)
+{
+	if (colorIndex >= 0 && colorIndex < static_cast<int>(m_color_unavailable.size()))
+	{
+		m_color_unavailable[colorIndex] = unavailable;
+		UpdateColorCursorHighlight();
 	}
 }

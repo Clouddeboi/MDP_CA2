@@ -23,6 +23,7 @@ private:
 	int GetJoinedPlayerCount() const;
 	bool CanAddMorePlayers() const;
 	bool AreAllPlayersReady() const;
+	void UpdateColorAvailability();
 
 private:
 	static constexpr int kMaxPlayers = 20;

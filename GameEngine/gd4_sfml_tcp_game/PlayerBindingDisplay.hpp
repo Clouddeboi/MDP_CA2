@@ -43,6 +43,7 @@ public:
 	int GetCurrentColorCursor() const;
 	void ConfirmColorSelection();
 	void UpdateColorCursorHighlight();
+	void MarkColorAsUnavailable(int colorIndex, bool unavailable);
 
 private:
 	void draw(sf::RenderTarget& target, sf::RenderStates states) const override;
@@ -73,6 +74,7 @@ private:
 	bool m_showing_color_picker;
 	int m_selected_color_index;
 	std::vector<sf::Color> m_available_colors;
+	std::vector<bool> m_color_unavailable;
 	std::vector<sf::RectangleShape> m_color_boxes;
 	static constexpr int kColorGridColumns = 5;
 	static constexpr int kColorGridRows = 4;

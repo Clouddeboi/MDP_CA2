@@ -357,8 +357,16 @@ bool BindingState::HandleEvent(const sf::Event& event)
 				{
 					if (m_player_slots[i].IsShowingColorPicker())
 					{
-						//Confirm color selection and ready up
+						//Confirm and mark color selection as taken and ready up
 						m_player_slots[i].ConfirmColorSelection();
+
+						int selectedColor = m_player_slots[i].GetSelectedColorIndex();
+						if (selectedColor >= 0 && selectedColor < static_cast<int>(m_color_taken.size()))
+						{
+							m_color_taken[selectedColor] = true;
+							UpdateColorAvailability();
+						}
+
 						m_player_slots[i].SetReady(true);
 						GetContext().sounds->Play(SoundEffect::kPairedPlayer);
 						std::cout << "[BindingState] Player " << (i + 1) << " confirmed color and readied up\n";
@@ -372,6 +380,12 @@ bool BindingState::HandleEvent(const sf::Event& event)
 
 						if (currentReady)
 						{
+							int currentColor = m_player_slots[i].GetSelectedColorIndex();
+							if (currentColor >= 0 && currentColor < static_cast<int>(m_color_taken.size()))
+							{
+								m_color_taken[currentColor] = false;
+								UpdateColorAvailability();
+							}
 							m_player_slots[i].ShowColorPicker(true);
 						}
 
@@ -396,6 +410,12 @@ bool BindingState::HandleEvent(const sf::Event& event)
 
 						if (currentReady)
 						{
+							int currentColor = m_player_slots[i].GetSelectedColorIndex();
+							if (currentColor >= 0 && currentColor < static_cast<int>(m_color_taken.size()))
+							{
+								m_color_taken[currentColor] = false;
+								UpdateColorAvailability();
+							}
 							m_player_slots[i].ShowColorPicker(true);
 						}
 
@@ -495,6 +515,14 @@ bool BindingState::HandleEvent(const sf::Event& event)
 					if (m_player_slots[i].IsShowingColorPicker())
 					{
 						m_player_slots[i].ConfirmColorSelection();
+
+						int selectedColor = m_player_slots[i].GetSelectedColorIndex();
+						if (selectedColor >= 0 && selectedColor < static_cast<int>(m_color_taken.size()))
+						{
+							m_color_taken[selectedColor] = true;
+							UpdateColorAvailability();
+						}
+
 						m_player_slots[i].SetReady(true);
 						GetContext().sounds->Play(SoundEffect::kPairedPlayer);
 						std::cout << "[BindingState] Player " << (i + 1) << " confirmed color and readied up\n";
@@ -507,6 +535,12 @@ bool BindingState::HandleEvent(const sf::Event& event)
 
 						if (currentReady)
 						{
+							int currentColor = m_player_slots[i].GetSelectedColorIndex();
+							if (currentColor >= 0 && currentColor < static_cast<int>(m_color_taken.size()))
+							{
+								m_color_taken[currentColor] = false;
+								UpdateColorAvailability();
+							}
 							m_player_slots[i].ShowColorPicker(true);
 						}
 
@@ -565,27 +599,23 @@ void BindingState::AddPlayer(const InputDeviceInfo& device)
 	//Update grid slot
 	m_player_slots[playerIndex].SetPlayerInfo(playerIndex + 1, device);
 
-	//Get available colors
-	std::vector<sf::Color> available_colors;
+	//Set available colors
+	m_player_slots[playerIndex].SetAvailableColors(m_all_colors);
+
+	//Mark taken colors as unavailable
 	for (size_t i = 0; i < m_all_colors.size(); ++i)
 	{
-		if (!m_color_taken[i])
-		{
-			available_colors.push_back(m_all_colors[i]);
-		}
+		m_player_slots[playerIndex].MarkColorAsUnavailable(i, m_color_taken[i]);
 	}
 
-	//Set available colors and show picker
-	m_player_slots[playerIndex].SetAvailableColors(m_all_colors);
 	m_player_slots[playerIndex].ShowColorPicker(true);
 
-	//Auto-select first available color
+	//Auto-select first available color, but DON'T mark as taken yet
 	for (size_t i = 0; i < m_all_colors.size(); ++i)
 	{
 		if (!m_color_taken[i])
 		{
 			m_player_slots[playerIndex].SelectColorAtIndex(static_cast<int>(i));
-			m_color_taken[i] = true;
 			break;
 		}
 	}
@@ -645,4 +675,17 @@ bool BindingState::AreAllPlayersReady() const
 		}
 	}
 	return true;
+}
+
+void BindingState::UpdateColorAvailability()
+{
+	// Update all players' color pickers with current availability
+	for (int i = 0; i < GetJoinedPlayerCount(); ++i)
+	{
+		for (size_t colorIdx = 0; colorIdx < m_color_taken.size(); ++colorIdx)
+		{
+			bool isMyColor = (m_player_slots[i].GetSelectedColorIndex() == static_cast<int>(colorIdx));
+			m_player_slots[i].MarkColorAsUnavailable(colorIdx, m_color_taken[colorIdx] && !isMyColor);
+		}
+	}
 }
