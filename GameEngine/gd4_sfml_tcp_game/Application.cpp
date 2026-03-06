@@ -20,7 +20,9 @@ Application::Application() : m_window(sf::VideoMode({ 1600, 900 }), "States", sf
 	m_textures.Load(TextureID::kButtonActivated, "Media/Textures/ButtonPressed.png");
 	m_textures.Load(TextureID::kButtons, "Media/Textures/Buttons.png");
 
-	m_textures.Load(TextureID::kPlayer1Animations, "Media/Textures/Player/Wizard_M_Run_Spritesheet.png");
+	m_textures.Load(TextureID::kPlayerIdleAnimation, "Media/Textures/Player/Player_Idle_Spaceman.png");
+	m_textures.Load(TextureID::kPlayerRunAnimation, "Media/Textures/Player/Player_Run_Spaceman.png");
+
 
 	RegisterStates();
 	m_stack.PushState(StateID::kTitle);

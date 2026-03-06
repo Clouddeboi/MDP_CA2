@@ -115,15 +115,15 @@ Aircraft::Aircraft(AircraftType type, const TextureHolder& textures, const FontH
 
 		TextureID anim_texture = (m_player_id == 0) ? TextureID::kPlayer1Animations : TextureID::kPlayer2Animations;
 
-		m_idle_animation.SetTexture(textures.Get(anim_texture));
-		m_idle_animation.SetFrameSize(sf::Vector2i(16, 21));
+		m_idle_animation.SetTexture(textures.Get(TextureID::kPlayerIdleAnimation));
+		m_idle_animation.SetFrameSize(sf::Vector2i(24, 24));
 		m_idle_animation.SetNumFrames(4);
 		m_idle_animation.SetDuration(sf::seconds(0.5f));
 		m_idle_animation.SetRepeating(true);
 		Utility::CentreOrigin(m_idle_animation);
 
-		m_run_animation.SetTexture(textures.Get(anim_texture));
-		m_run_animation.SetFrameSize(sf::Vector2i(16, 21));
+		m_run_animation.SetTexture(textures.Get(TextureID::kPlayerRunAnimation));
+		m_run_animation.SetFrameSize(sf::Vector2i(24, 24));
 		m_run_animation.SetNumFrames(4);
 		m_run_animation.SetDuration(sf::seconds(0.8f));
 		m_run_animation.SetRepeating(true);

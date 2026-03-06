@@ -27,5 +27,7 @@ enum class TextureID
 	kPowerUps,
 	kPlayer1Animations,
 	kPlayer2Animations,
+	kPlayerIdleAnimation,
+	kPlayerRunAnimation,
 	kPlayerGrayscale
 };

@@ -743,8 +743,11 @@ void World::LoadTextures()
 	m_textures.Load(TextureID::kPlatform, "Media/Textures/stone_tile.png");
 	m_textures.Load(TextureID::kBox, "Media/Textures/crate_tile.png");
 
-	m_textures.Load(TextureID::kPlayer1Animations, "Media/Textures/Player/Wizard_M_Run_Spritesheet.png");
-	m_textures.Load(TextureID::kPlayer2Animations, "Media/Textures/Player/Wizard_M_Run_Spritesheet.png");
+	m_textures.Load(TextureID::kPlayer1Animations, "Media/Textures/Player/Player_Idle_Spaceman.png");
+	m_textures.Load(TextureID::kPlayer2Animations, "Media/Textures/Player/Player_Run_Spaceman.png");
+
+	m_textures.Load(TextureID::kPlayerIdleAnimation, "Media/Textures/Player/Player_Idle_Spaceman.png");
+	m_textures.Load(TextureID::kPlayerRunAnimation, "Media/Textures/Player/Player_Run_Spaceman.png");
 
 	m_textures.Load(TextureID::kPlayerGrayscale, "Media/Textures/Player/Wizard_M_Jump.png");
 
