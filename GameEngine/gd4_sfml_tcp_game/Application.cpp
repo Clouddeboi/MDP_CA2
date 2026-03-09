@@ -9,18 +9,20 @@
 
 const sf::Time Application::kTimePerFrame = sf::seconds(1.f/60.f);
 
-Application::Application() : m_window(sf::VideoMode({ 1024, 768 }), "States", sf::Style::Close)
+Application::Application() : m_window(sf::VideoMode({ 1600, 900 }), "States", sf::Style::Close)
 	, m_stack(State::Context(m_window, m_textures, m_fonts, m_player, m_music, m_sound))
 {
 	m_window.setKeyRepeatEnabled(false);
 	m_fonts.Load(Font::kMain, "Media/Fonts/Sansation.ttf");
-	m_textures.Load(TextureID::kTitleScreen, "Media/Textures/TitleScreen.png");
+	m_textures.Load(TextureID::kTitleScreen, "Media/Textures/Background1.png");
 	m_textures.Load(TextureID::kButtonNormal, "Media/Textures/ButtonNormal.png");
 	m_textures.Load(TextureID::kButtonSelected, "Media/Textures/ButtonSelected.png");
 	m_textures.Load(TextureID::kButtonActivated, "Media/Textures/ButtonPressed.png");
 	m_textures.Load(TextureID::kButtons, "Media/Textures/Buttons.png");
 
-	m_textures.Load(TextureID::kPlayer1Animations, "Media/Textures/Player/Wizard_M_Run_Spritesheet.png");
+	m_textures.Load(TextureID::kPlayerIdleAnimation, "Media/Textures/Player/Player_Idle_Spaceman.png");
+	m_textures.Load(TextureID::kPlayerRunAnimation, "Media/Textures/Player/Player_Run_Spaceman.png");
+
 
 	RegisterStates();
 	m_stack.PushState(StateID::kTitle);

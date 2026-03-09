@@ -13,7 +13,7 @@ PlayerBindingDisplay::PlayerBindingDisplay(FontHolder& fonts, TextureHolder& tex
 	, m_player_color(sf::Color::White)
 	, m_is_ready(false)
 	, m_is_occupied(false)
-	, m_player_idle_animation(textures.Get(TextureID::kPlayer1Animations))
+	, m_player_idle_animation(textures.Get(TextureID::kPlayerIdleAnimation))
 	, m_showing_color_picker(false)
 	, m_selected_color_index(-1)
 	, m_current_color_cursor(0)
@@ -23,7 +23,7 @@ PlayerBindingDisplay::PlayerBindingDisplay(FontHolder& fonts, TextureHolder& tex
 	m_background.setOutlineThickness(2.f);
 
 	//Configure idle animation
-	m_player_idle_animation.SetFrameSize(sf::Vector2i(16, 21));
+	m_player_idle_animation.SetFrameSize(sf::Vector2i(24, 24));
 	m_player_idle_animation.SetNumFrames(4);
 	m_player_idle_animation.SetDuration(sf::seconds(0.5f));
 	m_player_idle_animation.SetRepeating(true);
