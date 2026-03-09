@@ -211,6 +211,7 @@
     <ClInclude Include="GameState.hpp" />
     <ClInclude Include="InputDevice.hpp" />
     <ClInclude Include="Label.hpp" />
+    <ClInclude Include="LevelData.hpp" />
     <ClInclude Include="MenuOptions.hpp" />
     <ClInclude Include="MenuState.hpp" />
     <ClInclude Include="MissionStatus.hpp" />
@@ -249,6 +250,7 @@
     <ClInclude Include="TextNode.hpp" />
     <ClInclude Include="TextureHolder.hpp" />
     <ClInclude Include="TextureID.hpp" />
+    <ClInclude Include="TileType.hpp" />
     <ClInclude Include="TitleState.hpp" />
     <ClInclude Include="Utility.hpp" />
     <ClInclude Include="World.hpp" />

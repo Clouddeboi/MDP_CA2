@@ -359,6 +359,12 @@
     <ClInclude Include="PlayerBindingDisplay.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
+    <ClInclude Include="TileType.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="LevelData.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
   <ItemGroup>
     <None Include="ResourceHolder.inl">
