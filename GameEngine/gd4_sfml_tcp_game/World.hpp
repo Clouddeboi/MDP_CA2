@@ -13,6 +13,8 @@
 #include "ChromaticAberrationEffect.hpp"
 #include "ScreenShakeEffect.hpp"
 #include "PickupType.hpp"
+#include "LevelData.hpp"
+#include "LevelManager.hpp"
 
 #include <array>
 
@@ -46,9 +48,16 @@ public:
 	int GetPlayerCount() const;
 	int GetMaxPlayers() const;
 
+	bool LoadLevel(const std::string& levelPath);
+	void LoadRandomLevel();
+	void ClearLevel();
+	LevelData& GetCurrentLevelData();
+	const LevelData& GetCurrentLevelData() const;
+
 private:
 	void LoadTextures();
 	void BuildScene();
+	void BuildSceneFromLevel();
 	void AdaptPlayerPosition();
 	void AdaptPlayerVelocity();
 
@@ -69,6 +78,9 @@ private:
 	void AddPlatform(float x, float y, float width, float height, float unit);
 	void AddBox(float x, float y);
 
+	void AddPlatformFromTile(const TileData& tile);
+	void AddBoxFromTile(const TileData& tile);
+
 	void CheckRoundEnd();
 	void StartNewRound();
 	void RespawnPlayers();
@@ -82,6 +94,7 @@ private:
 	void UpdateCameraZoom(sf::Time dt);
 
 	void GenerateSpawnPositions();
+	void LoadSpawnPositionsFromLevel();
 
 private:
 	struct SpawnPoint
@@ -170,5 +183,9 @@ private:
 	const float m_max_player_distance = 2550.f;
 
 	sf::FloatRect m_camera_play_bounds;
+
+	LevelData m_current_level_data;
+	LevelManager m_level_manager;
+	bool m_using_custom_level;
 };
 

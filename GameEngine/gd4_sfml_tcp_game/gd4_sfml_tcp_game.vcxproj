@@ -158,6 +158,7 @@
     <ClCompile Include="GameState.cpp" />
     <ClCompile Include="InputDevice.cpp" />
     <ClCompile Include="Label.cpp" />
+    <ClCompile Include="LevelManager.cpp" />
     <ClCompile Include="LevelSerializer.cpp" />
     <ClCompile Include="Main.cpp" />
     <ClCompile Include="MenuState.cpp" />
@@ -213,6 +214,7 @@
     <ClInclude Include="InputDevice.hpp" />
     <ClInclude Include="Label.hpp" />
     <ClInclude Include="LevelData.hpp" />
+    <ClInclude Include="LevelManager.hpp" />
     <ClInclude Include="LevelSerializer.hpp" />
     <ClInclude Include="MenuOptions.hpp" />
     <ClInclude Include="MenuState.hpp" />

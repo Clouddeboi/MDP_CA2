@@ -7,6 +7,7 @@
 #include "Platform.hpp"
 #include "Box.hpp"
 #include "PlayerBindingConfig.hpp"
+#include "LevelSerializer.hpp"
 #include <iostream>
 #include <ctime>  
 
@@ -55,6 +56,9 @@ World::World(sf::RenderTarget& output_target, FontHolder& font, SoundPlayer& sou
 	,m_current_zoom_level(1.0f)
 	,m_camera_state_saved(false)
 	,m_camera_play_bounds({ 50.f, 50.f }, { 1600.f, 900.f })
+	,m_current_level_data()
+	,m_level_manager()
+	,m_using_custom_level(false)
 {
 	std::srand(static_cast<unsigned int>(std::time(nullptr)));
 
@@ -66,6 +70,8 @@ World::World(sf::RenderTarget& output_target, FontHolder& font, SoundPlayer& sou
 	m_camera.setCenter({ m_world_bounds.size.x / 2.f, m_world_bounds.size.y / 2.f });
 
 	GenerateSpawnPositions();
+	LoadRandomLevel();
+	LoadSpawnPositionsFromLevel();
 
 	m_round_over_text.emplace(m_fonts.Get(Font::kMain), "", 80);
 	m_round_over_text->setFillColor(sf::Color::White);
@@ -774,10 +780,170 @@ void World::AddBox(float x, float y)
 
 	std::unique_ptr<Box> box(new Box(boxSize, boxTexture));
 
-	// Convert top-left to center
+	//Convert top-left to center
 	box->setPosition(sf::Vector2f{x, y});
 
 	m_scene_layers[static_cast<int>(SceneLayers::kUpperAir)]->AttachChild(std::move(box));
+}
+
+bool World::LoadLevel(const std::string& levelPath)
+{
+	LevelData tempLevel;
+	if (!LevelSerializer::Load(levelPath, tempLevel))
+	{
+		std::cerr << "Failed to load level: " << levelPath << std::endl;
+		return false;
+	}
+
+	if (!tempLevel.IsValid())
+	{
+		std::cerr << "Level validation failed: " << levelPath << std::endl;
+		return false;
+	}
+
+	m_current_level_data = tempLevel;
+	m_using_custom_level = true;
+
+	//Update world bounds from level
+	m_world_bounds = m_current_level_data.m_world_bounds;
+	m_camera_play_bounds = m_world_bounds;
+
+	std::cout << "Level loaded successfully: " << m_current_level_data.m_metadata.m_level_name << std::endl;
+	return true;
+}
+
+void World::LoadRandomLevel()
+{
+	m_level_manager.RefreshLevelList();
+
+	if (m_level_manager.HasLevels())
+	{
+		std::string randomLevelPath = m_level_manager.GetRandomLevelPath();
+		std::cout << "Loading random level: " << randomLevelPath << std::endl;
+
+		if (LoadLevel(randomLevelPath))
+		{
+			std::cout << "Random level loaded successfully!" << std::endl;
+		}
+		else
+		{
+			std::cerr << "Failed to load random level, using default" << std::endl;
+			m_using_custom_level = false;
+		}
+	}
+	else
+	{
+		std::cout << "No custom levels found, using default level" << std::endl;
+		m_using_custom_level = false;
+	}
+}
+
+void World::ClearLevel()
+{
+	//Remove all platforms and boxes from the scene
+	Command clearPlatforms;
+	clearPlatforms.category = static_cast<int>(ReceiverCategories::kPlatform);
+	clearPlatforms.action = DerivedAction<Entity>([](Entity& e, sf::Time)
+		{
+			e.Destroy();
+		});
+	m_command_queue.Push(clearPlatforms);
+
+	//Clear level data
+	m_current_level_data.Clear();
+	m_using_custom_level = false;
+}
+
+LevelData& World::GetCurrentLevelData()
+{
+	return m_current_level_data;
+}
+
+const LevelData& World::GetCurrentLevelData() const
+{
+	return m_current_level_data;
+}
+
+void World::LoadSpawnPositionsFromLevel()
+{
+	m_player_spawn_positions.clear();
+
+	if (m_using_custom_level && !m_current_level_data.m_player_spawns.empty())
+	{
+		//Load spawn positions from level data
+		for (const auto& spawn : m_current_level_data.m_player_spawns)
+		{
+			m_player_spawn_positions.push_back(spawn.m_position);
+		}
+
+		std::cout << "Loaded " << m_player_spawn_positions.size() << " spawn positions from level" << std::endl;
+	}
+	else
+	{
+		//Fall back to generated spawn positions
+		GenerateSpawnPositions();
+	}
+}
+
+void World::AddPlatformFromTile(const TileData& tile)
+{
+	//Create platform from tile data
+	std::unique_ptr<Platform> platform;
+
+	//Check if there are texture variants available
+	if (tile.m_texture_variant > 0 && m_textures.Get(TextureID::kPlatform).getSize().x > 0)
+	{
+		platform.reset(new Platform(
+			sf::Vector2f(tile.m_width, tile.m_height),
+			m_textures.Get(TextureID::kPlatform)
+		));
+	}
+	else
+	{
+		//Default colored platform
+		platform.reset(new Platform(
+			sf::Vector2f(tile.m_width, tile.m_height),
+			sf::Color(150, 75, 0)
+		));
+	}
+
+	platform->setPosition(tile.m_position);
+	m_scene_layers[static_cast<int>(SceneLayers::kUpperAir)]->AttachChild(std::move(platform));
+}
+
+void World::AddBoxFromTile(const TileData& tile)
+{
+	sf::Vector2f boxSize(tile.m_width, tile.m_height);
+	std::unique_ptr<Box> box(new Box(boxSize, m_textures.Get(TextureID::kBox)));
+	box->setPosition(tile.m_position);
+	m_scene_layers[static_cast<int>(SceneLayers::kUpperAir)]->AttachChild(std::move(box));
+}
+
+void World::BuildSceneFromLevel()
+{
+	std::cout << "Building scene from level data..." << std::endl;
+	std::cout << "Tiles to place: " << m_current_level_data.GetTileCount() << std::endl;
+
+	//Add all tiles from the level
+	for (const auto& tile : m_current_level_data.m_tiles)
+	{
+		switch (tile.m_type)
+		{
+		case TileType::kPlatform:
+			AddPlatformFromTile(tile);
+			break;
+		case TileType::kBox:
+			AddBoxFromTile(tile);
+			break;
+		case TileType::kPlayerSpawn:
+			//Spawn points are handled separately
+			break;
+		default:
+			break;
+		}
+	}
+
+	std::cout << "Scene built from level successfully!" << std::endl;
 }
 
 void World::BuildScene()
@@ -866,25 +1032,33 @@ void World::BuildScene()
 		m_player_aircrafts.push_back(player_aircraft);
 	}
 
-	//Platforms
-	//This unit just needs to be multiplied by the amount of tiles you need to make/place something
-	float tile_unit = 18.f;
+	if (m_using_custom_level)
+	{
+		BuildSceneFromLevel();
+	}
+	else
+	{
+		//Default hardcoded level
+		//Platforms
+		//This unit just needs to be multiplied by the amount of tiles you need to make/place something
+		float tile_unit = 18.f;
 
-	//x,y,w,h,unit
-	AddPlatform(3.f, 7.f, 5.f, 2.f, tile_unit);
-	AddPlatform(18.f, 7.f, 5.f, 2.f, tile_unit);
-	AddPlatform(10.5f, 14.f, 6.f, 1.f, tile_unit);
-	AddPlatform(6.5f, 11.5f, 1.f, 1.f, tile_unit);
-	AddPlatform(14.5f, 11.5f, 1.f, 1.f, tile_unit);
-	AddPlatform(10.5f, 9.f, 4.f, 1.f, tile_unit);
-	AddPlatform(4.f, 16.f, 5.f, 1.f, tile_unit);
-	AddPlatform(18.f, 16.f, 5.f, 1.f, tile_unit);
+		//x,y,w,h,unit
+		AddPlatform(3.f, 7.f, 5.f, 2.f, tile_unit);
+		AddPlatform(18.f, 7.f, 5.f, 2.f, tile_unit);
+		AddPlatform(10.5f, 14.f, 6.f, 1.f, tile_unit);
+		AddPlatform(6.5f, 11.5f, 1.f, 1.f, tile_unit);
+		AddPlatform(14.5f, 11.5f, 1.f, 1.f, tile_unit);
+		AddPlatform(10.5f, 9.f, 4.f, 1.f, tile_unit);
+		AddPlatform(4.f, 16.f, 5.f, 1.f, tile_unit);
+		AddPlatform(18.f, 16.f, 5.f, 1.f, tile_unit);
 
-	AddBox(350.f, 600.f);
-	AddBox(410.f, 600.f);
-	AddBox(710.f, 600.f);
-	AddBox(890.f, 600.f);
-	AddBox(1100.f, 600.f);
+		AddBox(350.f, 600.f);
+		AddBox(410.f, 600.f);
+		AddBox(710.f, 600.f);
+		AddBox(890.f, 600.f);
+		AddBox(1100.f, 600.f);
+	}
 
 	//Add the particle nodes to the scene
 	std::unique_ptr<ParticleNode> smokeNode(new ParticleNode(ParticleType::kSmoke, m_textures));
