@@ -30,7 +30,7 @@ World::World(sf::RenderTarget& output_target, FontHolder& font, SoundPlayer& sou
 	,m_sounds(sounds)
 	,m_scenegraph(ReceiverCategories::kNone)
 	,m_scene_layers()
-	,m_world_bounds({ 0.f,0.f }, { 2400.f, 1250.f })
+	,m_world_bounds({ 0.f,0.f }, { 1600.f, 900.f })
 	,m_spawn_position(m_world_bounds.size.x / 2.f, m_world_bounds.size.y - 300.f)
 	,m_scrollspeed(0.f)//Setting it to 0 since we don't want our players to move up automatically
 	,m_scene_texture({ m_target.getSize().x, m_target.getSize().y })
@@ -54,7 +54,7 @@ World::World(sf::RenderTarget& output_target, FontHolder& font, SoundPlayer& sou
 	,m_pickup_spawn_interval(sf::seconds(5.f))
 	,m_current_zoom_level(1.0f)
 	,m_camera_state_saved(false)
-	,m_camera_play_bounds({ 50.f, 50.f }, { 2400.f, 1250.f })
+	,m_camera_play_bounds({ 50.f, 50.f }, { 1600.f, 900.f })
 {
 	std::srand(static_cast<unsigned int>(std::time(nullptr)));
 
@@ -733,14 +733,14 @@ void World::LoadTextures()
 	m_textures.Load(TextureID::kFireRate, "Media/Textures/FireRate.png");
 	m_textures.Load(TextureID::kFinishLine, "Media/Textures/FinishLine.png");
 
-	m_textures.Load(TextureID::kEntities, "Media/Textures/spritesheet_default.png");
+	m_textures.Load(TextureID::kEntities, "Media/Textures/Sprite_Sheet/tilemap.png");
 	m_textures.Load(TextureID::kPowerUps, "Media/Textures/Icons.png");
-	m_textures.Load(TextureID::kJungle, "Media/Textures/Background.png");
+	m_textures.Load(TextureID::kJungle, "Media/Textures/Background1.png");
 	m_textures.Load(TextureID::kExplosion, "Media/Textures/Explosion.png");
 	m_textures.Load(TextureID::kParticle, "Media/Textures/Particle.png");
 
 	//Tiles are all 64x64, if used on a platform they need to be (x= 64.f y= 64.f)
-	m_textures.Load(TextureID::kPlatform, "Media/Textures/stone_tile.png");
+	m_textures.Load(TextureID::kPlatform, "Media/Textures/Single_Sprites/Ground/tile_0000.png");
 	m_textures.Load(TextureID::kBox, "Media/Textures/crate_tile.png");
 
 	m_textures.Load(TextureID::kPlayer1Animations, "Media/Textures/Player/Player_Idle_Spaceman.png");
@@ -868,7 +868,7 @@ void World::BuildScene()
 
 	//Platforms
 	//This unit just needs to be multiplied by the amount of tiles you need to make/place something
-	float tile_unit = 64.f;
+	float tile_unit = 18.f;
 
 	//x,y,w,h,unit
 	AddPlatform(3.f, 7.f, 5.f, 2.f, tile_unit);
