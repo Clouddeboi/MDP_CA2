@@ -120,7 +120,7 @@ std::vector<TileType> TileRegistry::GetAllTileTypes() const
 	{
 		types.push_back(info.m_type);
 	}
-	types.push_back(TileType::kPlayerSpawn);
+	//types.push_back(TileType::kPlayerSpawn);
 	return types;
 }
 

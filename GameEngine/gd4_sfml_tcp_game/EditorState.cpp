@@ -335,7 +335,7 @@ void EditorState::UpdateMousePosition()
 	m_preview_pos = GetSnappedPosition(m_world_mouse_pos);
 
 	//Continuous placement while dragging
-	if (m_is_placing_tile)
+	if (m_is_placing_tile && m_current_tile_type != TileType::kPlayerSpawn)
 		HandleTilePlacement();
 	else if (m_is_deleting_tile)
 		HandleTileDeletion();
@@ -392,6 +392,17 @@ void EditorState::AddTile(const sf::Vector2f& position)
 			{
 				spawn.m_position = position;
 				m_is_dirty = true;
+
+				//Find lowest missing index
+				for (int i = 0; i < 20; ++i)
+				{
+					bool found = false;
+					for (const auto& existing : m_level_data.m_player_spawns)
+					{
+						if (existing.m_spawn_index == i) { found = true; break; }
+					}
+					if (!found) { m_current_spawn_index = i; break; }
+				}
 				return;
 			}
 		}
@@ -401,6 +412,17 @@ void EditorState::AddTile(const sf::Vector2f& position)
 		{
 			m_level_data.m_player_spawns.emplace_back(m_current_spawn_index, position);
 			m_is_dirty = true;
+
+			//Finds lowest missing index
+			for (int i = 0; i < 20; ++i)
+			{
+				bool found = false;
+				for (const auto& existing : m_level_data.m_player_spawns)
+				{
+					if (existing.m_spawn_index == i) { found = true; break; }
+				}
+				if (!found) { m_current_spawn_index = i; break; }
+			}
 		}
 	}
 	else if (m_current_tile_type != TileType::kNone)
@@ -431,6 +453,26 @@ void EditorState::RemoveTile(const sf::Vector2f& position)
 	{
 		m_level_data.m_player_spawns.erase(spawnIt, m_level_data.m_player_spawns.end());
 		m_is_dirty = true;
+
+		//Find lowest available index to reset m_current_spawn_index
+		for (int i = 0; i < 20; ++i)
+		{
+			bool found = false;
+			for (const auto& existing : m_level_data.m_player_spawns)
+			{
+				if (existing.m_spawn_index == i)
+				{
+					found = true;
+					break;
+				}
+			}
+			if (!found)
+			{
+				m_current_spawn_index = i;//Reset to lowest missing index
+				break;
+			}
+		}
+
 		return;
 	}
 
