@@ -28,6 +28,9 @@ Application::Application() : m_window(sf::VideoMode({ 1600, 900 }), "States", sf
 	m_textures.Load(TextureID::kPlayerIdleAnimation, "Media/Textures/Player/Player_Idle_Spaceman.png");
 	m_textures.Load(TextureID::kPlayerRunAnimation, "Media/Textures/Player/Player_Run_Spaceman.png");
 
+	m_textures.Load(TextureID::kPlatform, "Media/Textures/Sprite_Sheet/tilemap.png");
+	m_textures.Load(TextureID::kEntities, "Media/Textures/Sprite_Sheet/tilemap.png");
+	m_textures.Load(TextureID::kBox, "Media/Textures/crate_tile.png");
 
 	RegisterStates();
 	m_stack.PushState(StateID::kTitle);

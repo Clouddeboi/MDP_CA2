@@ -18,32 +18,31 @@ void TileRegistry::Initialize()
 		platformInfo.m_variants.emplace_back(
 			TextureID::kPlatform,
 			sf::IntRect({ 0, 0 }, { 18, 18 }),
+			"Platform Single"
+		);
+
+		platformInfo.m_variants.emplace_back(
+			TextureID::kPlatform,
+			sf::IntRect({ 18, 0 }, { 18, 18 }),
 			"Platform Left"
 		);
 
 		platformInfo.m_variants.emplace_back(
 			TextureID::kPlatform,
-			sf::IntRect({ 64, 0 }, { 64, 32 }),
+			sf::IntRect({ 36, 0 }, { 18, 18 }),
 			"Platform Middle"
 		);
 
 		platformInfo.m_variants.emplace_back(
 			TextureID::kPlatform,
-			sf::IntRect({ 128, 0 }, { 64, 32 }),
+			sf::IntRect({ 54, 0 }, { 18, 18 }),
 			"Platform Right"
 		);
-
-		platformInfo.m_variants.emplace_back(
-			TextureID::kPlatform,
-			sf::IntRect({ 192, 0 }, { 64, 32 }),
-			"Platform Single"
-		);
-
 
 		m_tile_types.push_back(platformInfo);
 	}
 
-	//Box tile type
+	//Box tile type (just keep is as the original for now)
 	{
 		TileTypeInfo boxInfo(TileType::kBox, "Box", 64.f, 64.f);
 
@@ -70,12 +69,12 @@ void TileRegistry::Initialize()
 
 	//Register Player Spawn tile type
 	{
-		TileTypeInfo spawnInfo(TileType::kPlayerSpawn, "Player Spawn", 32.f, 32.f);
+		TileTypeInfo spawnInfo(TileType::kPlayerSpawn, "Player Spawn", 18.f, 18.f);
 
 		//Player spawns don't need texture variants, they're just markers
 		spawnInfo.m_variants.emplace_back(
 			TextureID::kEntities,
-			sf::IntRect({ 0, 0 }, { 16, 16 }),
+			sf::IntRect({ 0, 0 }, { 18, 18 }),
 			"Spawn Point"
 		);
 
@@ -121,6 +120,7 @@ std::vector<TileType> TileRegistry::GetAllTileTypes() const
 	{
 		types.push_back(info.m_type);
 	}
+	types.push_back(TileType::kPlayerSpawn);
 	return types;
 }
 
@@ -143,9 +143,9 @@ std::string TileRegistry::TileTypeToString(TileType type)
 
 std::string TileRegistry::GetTileTypeName(TileType type) const
 {
-	const TileTypeInfo* info = GetTileTypeInfo(type);
-	if (info)
-		return info->m_type_name;
+	if (type == TileType::kPlayerSpawn) return "Player Spawn";
+	if (type == TileType::kNone) return "Eraser/None";
 
-	return "Unknown";
+	const TileTypeInfo* info = GetTileTypeInfo(type);
+	return info ? info->m_type_name : "Unknown Tool";
 }

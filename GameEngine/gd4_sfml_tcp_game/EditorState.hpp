@@ -6,6 +6,7 @@
 #include <SFML/Graphics/Text.hpp>
 #include <SFML/Graphics/RectangleShape.hpp>
 #include <SFML/Graphics/VertexArray.hpp>
+#include <SFML/Graphics/Sprite.hpp>
 
 class EditorState : public State
 {
@@ -21,6 +22,25 @@ private:
 	void HandleCameraMovement(sf::Time dt);
 	void HandleCameraZoom(float delta);
 	void UpdateMousePosition();
+
+	//Tile interaction
+	void HandleTilePlacement();
+	void HandleTileDeletion();
+	void SelectNextTileType();
+	void SelectPreviousTileType();
+	void SelectNextVariant();
+	void SelectPreviousVariant();
+	void IncreaseTileWidth();
+	void DecreaseTileWidth();
+	void IncreaseTileHeight();
+	void DecreaseTileHeight();
+	void AddTile(const sf::Vector2f& position);
+	void RemoveTile(const sf::Vector2f& position);
+
+	TileData* GetTileAt(const sf::Vector2f& position);
+	void UpdateStatusText();
+	void DrawTiles();
+	void DrawPreviewTile();
 
 	//Coordinates snapping helper
 	sf::Vector2f GetSnappedPosition(const sf::Vector2f& position) const;
@@ -55,4 +75,15 @@ private:
 	//Editor Status
 	bool m_is_dirty;//Has unsaved changes
 	std::string m_current_filename;
+
+	//Tile Placement State
+	TileType m_current_tile_type;
+	int m_current_variant;
+	float m_current_tile_width;
+	float m_current_tile_height;
+	bool m_is_placing_tile;
+	bool m_is_deleting_tile;
+	sf::Vector2f m_preview_pos;
+	sf::Sprite m_preview_sprite;
+	int m_current_spawn_index;
 };
