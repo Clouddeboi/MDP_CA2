@@ -28,8 +28,17 @@ MenuState::MenuState(StateStack& stack, Context context)
         RequestStackPush(StateID::kSettings);
     });
 
+    auto editor_button = std::make_shared<gui::Button>(context);
+    editor_button->setPosition({ 100, 350 });
+    editor_button->SetText("Level Editor");
+    editor_button->SetCallback([this]()
+        {
+            RequestStackPop();
+            RequestStackPush(StateID::kEditor);
+        });
+
     auto exit_button = std::make_shared<gui::Button>(context);
-    exit_button->setPosition({ 100, 350 });
+    exit_button->setPosition({ 100, 400 });
     exit_button->SetText("Exit");
     exit_button->SetCallback([this]()
     {
@@ -38,6 +47,7 @@ MenuState::MenuState(StateStack& stack, Context context)
 
     m_gui_container.Pack(play_button);
     m_gui_container.Pack(settings_button);
+    m_gui_container.Pack(editor_button);
     m_gui_container.Pack(exit_button);
 
     //Play the music

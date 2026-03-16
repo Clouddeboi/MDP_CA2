@@ -8,6 +8,7 @@
 #include "Box.hpp"
 #include "PlayerBindingConfig.hpp"
 #include "LevelSerializer.hpp"
+#include "TileRegistry.hpp"
 #include <iostream>
 #include <ctime>  
 
@@ -746,7 +747,7 @@ void World::LoadTextures()
 	m_textures.Load(TextureID::kParticle, "Media/Textures/Particle.png");
 
 	//Tiles are all 64x64, if used on a platform they need to be (x= 64.f y= 64.f)
-	m_textures.Load(TextureID::kPlatform, "Media/Textures/Single_Sprites/Ground/tile_0000.png");
+	m_textures.Load(TextureID::kPlatform, "Media/Textures/Sprite_Sheet/tilemap.png");
 	m_textures.Load(TextureID::kBox, "Media/Textures/crate_tile.png");
 
 	m_textures.Load(TextureID::kPlayer1Animations, "Media/Textures/Player/Player_Idle_Spaceman.png");
@@ -887,20 +888,23 @@ void World::LoadSpawnPositionsFromLevel()
 
 void World::AddPlatformFromTile(const TileData& tile)
 {
-	//Create platform from tile data
 	std::unique_ptr<Platform> platform;
 
-	//Check if there are texture variants available
-	if (tile.m_texture_variant > 0 && m_textures.Get(TextureID::kPlatform).getSize().x > 0)
+	//Get variant info from registry
+	TileRegistry& registry = TileRegistry::GetInstance();
+	const TileVariantInfo* variantInfo = registry.GetVariant(TileType::kPlatform, tile.m_texture_variant);
+
+	if (variantInfo)
 	{
+		//Use the specific variant texture
 		platform.reset(new Platform(
 			sf::Vector2f(tile.m_width, tile.m_height),
-			m_textures.Get(TextureID::kPlatform)
+			m_textures.Get(variantInfo->m_texture_id)
 		));
 	}
 	else
 	{
-		//Default colored platform
+		//Fallback to default colored platform
 		platform.reset(new Platform(
 			sf::Vector2f(tile.m_width, tile.m_height),
 			sf::Color(150, 75, 0)
@@ -913,10 +917,26 @@ void World::AddPlatformFromTile(const TileData& tile)
 
 void World::AddBoxFromTile(const TileData& tile)
 {
+	//Get variant info from registry
+	TileRegistry& registry = TileRegistry::GetInstance();
+	const TileVariantInfo* variantInfo = registry.GetVariant(TileType::kBox, tile.m_texture_variant);
+
 	sf::Vector2f boxSize(tile.m_width, tile.m_height);
-	std::unique_ptr<Box> box(new Box(boxSize, m_textures.Get(TextureID::kBox)));
-	box->setPosition(tile.m_position);
-	m_scene_layers[static_cast<int>(SceneLayers::kUpperAir)]->AttachChild(std::move(box));
+
+	if (variantInfo)
+	{
+		//Use the specific variant texture
+		std::unique_ptr<Box> box(new Box(boxSize, m_textures.Get(variantInfo->m_texture_id)));
+		box->setPosition(tile.m_position);
+		m_scene_layers[static_cast<int>(SceneLayers::kUpperAir)]->AttachChild(std::move(box));
+	}
+	else
+	{
+		//Fallback to default box texture
+		std::unique_ptr<Box> box(new Box(boxSize, m_textures.Get(TextureID::kBox)));
+		box->setPosition(tile.m_position);
+		m_scene_layers[static_cast<int>(SceneLayers::kUpperAir)]->AttachChild(std::move(box));
+	}
 }
 
 void World::BuildSceneFromLevel()
