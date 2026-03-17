@@ -64,8 +64,15 @@ World::World(sf::RenderTarget& output_target, FontHolder& font, SoundPlayer& sou
 	std::srand(static_cast<unsigned int>(std::time(nullptr)));
 
 	GenerateSpawnPositions();
-	LoadRandomLevel();
-	LoadSpawnPositionsFromLevel();
+	PreloadLevels();
+
+	if (!m_preloaded_levels.empty())
+	{
+		m_current_level_index = static_cast<std::size_t>(std::rand() % m_preloaded_levels.size());
+		ApplyPreloadedLevel(m_current_level_index);
+		LoadSpawnPositionsFromLevel();
+	}
+
 	LoadTextures();
 	BuildScene();
 
@@ -401,6 +408,17 @@ void World::StartNewRound()
 	m_current_round++;
 	m_round_over = false;
 	m_camera_state_saved = false;
+
+	if (!m_preloaded_levels.empty())
+	{
+		SelectNextPreloadedLevel();
+		ApplyPreloadedLevel(m_current_level_index);
+
+		//Remove old static map geometry and rebuild from selected level
+		ClearStaticLevelGeometry();
+		BuildSceneFromLevel();
+		LoadSpawnPositionsFromLevel();
+	}
 
 	RespawnPlayers();
 	UpdateScoreDisplay();
@@ -840,16 +858,7 @@ void World::LoadRandomLevel()
 
 void World::ClearLevel()
 {
-	//Remove all platforms and boxes from the scene
-	Command clearPlatforms;
-	clearPlatforms.category = static_cast<int>(ReceiverCategories::kPlatform);
-	clearPlatforms.action = DerivedAction<Entity>([](Entity& e, sf::Time)
-		{
-			e.Destroy();
-		});
-	m_command_queue.Push(clearPlatforms);
-
-	//Clear level data
+	ClearStaticLevelGeometry();
 	m_current_level_data.Clear();
 	m_using_custom_level = false;
 }
@@ -1435,19 +1444,6 @@ void World::HandleCollisions()
 			pickup.Destroy();
 			player.PlayLocalSound(m_command_queue, SoundEffect::kCollectPickup);
 		}
-		else if (MatchesCategories(pair, ReceiverCategories::kPlayerAircraft, ReceiverCategories::kPickup))
-		{
-			auto& player = static_cast<Aircraft&>(*pair.first);
-			auto& pickup = static_cast<Pickup&>(*pair.second);
-
-			std::cout << "Player " << player.GetPlayerId() << " collected pickup type: "
-				<< static_cast<int>(pickup.GetPickupType()) << std::endl;
-
-			//Collision response
-			pickup.Apply(player);
-			pickup.Destroy();
-			player.PlayLocalSound(m_command_queue, pickup.GetCollectSound());
-		}
 		else if (MatchesCategories(pair, ReceiverCategories::kProjectile, ReceiverCategories::kPlatform))
 		{
 			auto& projectile = static_cast<Projectile&>(*pair.first);
@@ -1922,5 +1918,63 @@ int World::GetPlayerCount() const
 int World::GetMaxPlayers() const
 {
 	return kMaxPlayers;
+}
+
+void World::PreloadLevels()
+{
+	m_preloaded_levels.clear();
+	m_preloaded_level_paths.clear();
+
+	m_level_manager.RefreshLevelList();
+	const auto& paths = m_level_manager.GetAvailableLevels();
+
+	for (const auto& path : paths)
+	{
+		LevelData data;
+		if (LevelSerializer::Load(path, data) && data.IsValid())
+		{
+			m_preloaded_levels.push_back(data);
+			m_preloaded_level_paths.push_back(path);
+		}
+	}
+
+	std::cout << "Preloaded valid levels: " << m_preloaded_levels.size() << std::endl;
+}
+
+void World::ApplyPreloadedLevel(std::size_t index)
+{
+	if (index >= m_preloaded_levels.size())
+		return;
+
+	m_current_level_data = m_preloaded_levels[index];
+	m_using_custom_level = true;
+	m_world_bounds = m_current_level_data.m_world_bounds;
+	m_camera_play_bounds = m_world_bounds;
+
+	std::cout << "Applied level: " << m_preloaded_level_paths[index] << std::endl;
+}
+
+void World::SelectNextPreloadedLevel()
+{
+	if (m_preloaded_levels.empty())
+		return;
+
+	m_current_level_index = (m_current_level_index + 1) % m_preloaded_levels.size();
+}
+
+void World::ClearStaticLevelGeometry()
+{
+	Command clearPlatforms;
+	clearPlatforms.category = static_cast<int>(ReceiverCategories::kPlatform);
+	clearPlatforms.action = DerivedAction<Entity>([](Entity& e, sf::Time) { e.Destroy(); });
+
+	Command clearBoxes;
+	clearBoxes.category = static_cast<int>(ReceiverCategories::kBox);
+	clearBoxes.action = DerivedAction<Entity>([](Entity& e, sf::Time) { e.Destroy(); });
+
+	// Apply immediately, not deferred via queue
+	m_scenegraph.OnCommand(clearPlatforms, sf::Time::Zero);
+	m_scenegraph.OnCommand(clearBoxes, sf::Time::Zero);
+	m_scenegraph.RemoveWrecks();
 }
 	

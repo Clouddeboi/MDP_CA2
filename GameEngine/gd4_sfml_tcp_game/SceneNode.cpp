@@ -2,6 +2,72 @@
 #include "Utility.hpp"
 #include <cassert>
 
+namespace
+{
+    /// <summary>
+    /// Collisions have become very expensive with the large number of entities in the world,
+    /// so we can use category bits to quickly rule out collisions that don't need to be checked in detail,
+    /// such as static to static collisions like platforms to platforms
+    /// </summary>
+    bool HasCategory(unsigned int value, ReceiverCategories category)
+    {
+        return (value & static_cast<unsigned int>(category)) != 0;
+    }
+
+    bool IsStaticGeometry(unsigned int value)
+    {
+        return HasCategory(value, ReceiverCategories::kPlatform) ||
+            HasCategory(value, ReceiverCategories::kBox);
+    }
+
+    bool CanPotentiallyCollide(unsigned int a, unsigned int b)
+    {
+        //Ignore static-static checks
+        if (IsStaticGeometry(a) && IsStaticGeometry(b))
+            return false;
+
+        //Player related
+        if ((HasCategory(a, ReceiverCategories::kPlayerAircraft) && HasCategory(b, ReceiverCategories::kEnemyAircraft)) ||
+            (HasCategory(b, ReceiverCategories::kPlayerAircraft) && HasCategory(a, ReceiverCategories::kEnemyAircraft)))
+            return true;
+
+        if ((HasCategory(a, ReceiverCategories::kPlayerAircraft) && HasCategory(b, ReceiverCategories::kPickup)) ||
+            (HasCategory(b, ReceiverCategories::kPlayerAircraft) && HasCategory(a, ReceiverCategories::kPickup)))
+            return true;
+
+        if ((HasCategory(a, ReceiverCategories::kPlayerAircraft) && HasCategory(b, ReceiverCategories::kProjectile)) ||
+            (HasCategory(b, ReceiverCategories::kPlayerAircraft) && HasCategory(a, ReceiverCategories::kProjectile)))
+            return true;
+
+        if ((HasCategory(a, ReceiverCategories::kPlayerAircraft) && HasCategory(b, ReceiverCategories::kPlatform)) ||
+            (HasCategory(b, ReceiverCategories::kPlayerAircraft) && HasCategory(a, ReceiverCategories::kPlatform)))
+            return true;
+
+        if ((HasCategory(a, ReceiverCategories::kPlayerAircraft) && HasCategory(b, ReceiverCategories::kBox)) ||
+            (HasCategory(b, ReceiverCategories::kPlayerAircraft) && HasCategory(a, ReceiverCategories::kBox)))
+            return true;
+
+        //Projectile related
+        if ((HasCategory(a, ReceiverCategories::kProjectile) && HasCategory(b, ReceiverCategories::kPlatform)) ||
+            (HasCategory(b, ReceiverCategories::kProjectile) && HasCategory(a, ReceiverCategories::kPlatform)))
+            return true;
+
+        if ((HasCategory(a, ReceiverCategories::kProjectile) && HasCategory(b, ReceiverCategories::kBox)) ||
+            (HasCategory(b, ReceiverCategories::kProjectile) && HasCategory(a, ReceiverCategories::kBox)))
+            return true;
+
+        if ((HasCategory(a, ReceiverCategories::kAlliedProjectile) && HasCategory(b, ReceiverCategories::kEnemyAircraft)) ||
+            (HasCategory(b, ReceiverCategories::kAlliedProjectile) && HasCategory(a, ReceiverCategories::kEnemyAircraft)))
+            return true;
+
+        if ((HasCategory(a, ReceiverCategories::kEnemyProjectile) && HasCategory(b, ReceiverCategories::kPlayerAircraft)) ||
+            (HasCategory(b, ReceiverCategories::kEnemyProjectile) && HasCategory(a, ReceiverCategories::kPlayerAircraft)))
+            return true;
+
+        return false;
+    }
+}
+
 SceneNode::SceneNode(ReceiverCategories category):m_children(), m_parent(nullptr), m_default_category(category)
 {
 }
@@ -142,10 +208,17 @@ unsigned int SceneNode::GetCategory() const
 
 void SceneNode::CheckNodeCollision(SceneNode& node, std::set<Pair>& collision_pairs)
 {
-    if (this != &node && Collision(*this, node) && !IsDestroyed() && !node.IsDestroyed())
+    if (this != &node && !IsDestroyed() && !node.IsDestroyed())
     {
-        collision_pairs.insert(std::minmax(this, &node));
+        const unsigned int myCategory = GetCategory();
+        const unsigned int otherCategory = node.GetCategory();
+
+        if (CanPotentiallyCollide(myCategory, otherCategory) && Collision(*this, node))
+        {
+            collision_pairs.insert(std::minmax(this, &node));
+        }
     }
+
     for (Ptr& child : m_children)
     {
         child->CheckNodeCollision(node, collision_pairs);

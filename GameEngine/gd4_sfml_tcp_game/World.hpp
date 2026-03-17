@@ -96,6 +96,11 @@ private:
 	void GenerateSpawnPositions();
 	void LoadSpawnPositionsFromLevel();
 
+	void PreloadLevels();
+	void ApplyPreloadedLevel(std::size_t index);
+	void SelectNextPreloadedLevel();
+	void ClearStaticLevelGeometry();
+
 private:
 	struct SpawnPoint
 	{
@@ -187,5 +192,9 @@ private:
 	LevelData m_current_level_data;
 	LevelManager m_level_manager;
 	bool m_using_custom_level;
+
+	std::vector<LevelData> m_preloaded_levels;
+	std::vector<std::string> m_preloaded_level_paths;
+	std::size_t m_current_level_index = 0;
 };
 
