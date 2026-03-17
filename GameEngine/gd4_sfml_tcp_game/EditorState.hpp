@@ -2,11 +2,16 @@
 #include "State.hpp"
 #include "LevelData.hpp"
 #include "LevelManager.hpp"
+#include "Container.hpp" 
+#include "Button.hpp" 
 #include <SFML/Graphics/View.hpp>
 #include <SFML/Graphics/Text.hpp>
 #include <SFML/Graphics/RectangleShape.hpp>
 #include <SFML/Graphics/VertexArray.hpp>
 #include <SFML/Graphics/Sprite.hpp>
+#include <vector>
+#include <string>
+#include <cstdint>
 
 class EditorState : public State
 {
@@ -42,6 +47,13 @@ private:
 	void DrawTiles();
 	void DrawPreviewTile();
 
+	void SaveCurrentLevel();
+	void LoadSelectedLevel();
+	void RefreshSavedLevels();
+	void SelectNextSavedLevel();
+	void SelectPreviousSavedLevel();
+	void HandleTextEntered(std::uint32_t unicode);
+
 	//Coordinates snapping helper
 	sf::Vector2f GetSnappedPosition(const sf::Vector2f& position) const;
 
@@ -66,6 +78,10 @@ private:
 	sf::Text m_status_text;
 	sf::Text m_mouse_pos_text;
 	sf::RectangleShape m_ui_background;
+	gui::Container m_gui_container;
+	sf::Text m_level_name_text;
+	sf::Text m_saved_levels_text;
+	sf::Text m_hint_text;
 
 	//Grid Settings
 	bool m_show_grid;
@@ -75,6 +91,12 @@ private:
 	//Editor Status
 	bool m_is_dirty;//Has unsaved changes
 	std::string m_current_filename;
+
+	//Level naming and loading
+	std::string m_level_name_input;
+	bool m_is_editing_level_name;
+	std::vector<std::string> m_saved_levels;
+	int m_selected_level_index;
 
 	//Tile Placement State
 	TileType m_current_tile_type;

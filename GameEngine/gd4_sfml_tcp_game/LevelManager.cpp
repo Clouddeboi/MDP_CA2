@@ -12,40 +12,40 @@ LevelManager::LevelManager()
 
 void LevelManager::RefreshLevelList()
 {
-	m_available_levels.clear();
+    m_available_levels.clear();
 
-	std::string levelsDir = LevelSerializer::GetLevelsDirectory();
+    std::string levelsDir = LevelSerializer::GetLevelsDirectory();
 
-	//Create directory if it doesn't exist
-	if (!std::filesystem::exists(levelsDir))
-	{
-		std::filesystem::create_directories(levelsDir);
-		return;
-	}
+    //Create directory if it doesn't exist
+    if (!std::filesystem::exists(levelsDir))
+    {
+        std::filesystem::create_directories(levelsDir);
+        return;
+    }
 
-	//Scan for .lvl files
-	try
-	{
-		for (const auto& entry : std::filesystem::directory_iterator(levelsDir))
-		{
-			if (entry.is_regular_file())
-			{
-				std::string path = entry.path().string();
-				if (path.ends_with(".lvl"))
-				{
-					m_available_levels.push_back(path);
-					std::cout << "Found level: " << path << std::endl;
-				}
-			}
-		}
-	}
-	//Catch errors
-	catch (const std::filesystem::filesystem_error& e)
-	{
-		std::cerr << "Error scanning levels directory: " << e.what() << std::endl;
-	}
+    //Scan for .lvl files
+    try
+    {
+        for (const auto& entry : std::filesystem::directory_iterator(levelsDir))
+        {
+            if (!entry.is_regular_file())
+                continue;
 
-	std::cout << "Total levels found: " << m_available_levels.size() << std::endl;
+            const std::string path = entry.path().string();
+            if (!path.ends_with(".lvl"))
+                continue;
+
+            LevelData test;
+            if (LevelSerializer::Load(path, test))
+            {
+                m_available_levels.push_back(path);
+            }
+        }
+    }
+    catch (const std::filesystem::filesystem_error& e)
+    {
+        std::cerr << "Error scanning levels directory: " << e.what() << std::endl;
+    }
 }
 
 std::string LevelManager::GetRandomLevelPath() const

@@ -63,16 +63,15 @@ World::World(sf::RenderTarget& output_target, FontHolder& font, SoundPlayer& sou
 {
 	std::srand(static_cast<unsigned int>(std::time(nullptr)));
 
+	GenerateSpawnPositions();
+	LoadRandomLevel();
+	LoadSpawnPositionsFromLevel();
 	LoadTextures();
 	BuildScene();
 
 	m_camera.zoom(1.0f);
 	sf::Vector2f cameraSize = m_camera.getSize();
 	m_camera.setCenter({ m_world_bounds.size.x / 2.f, m_world_bounds.size.y / 2.f });
-
-	GenerateSpawnPositions();
-	LoadRandomLevel();
-	LoadSpawnPositionsFromLevel();
 
 	m_round_over_text.emplace(m_fonts.Get(Font::kMain), "", 80);
 	m_round_over_text->setFillColor(sf::Color::White);
@@ -1125,25 +1124,25 @@ void World::BuildScene()
 		m_scene_layers[static_cast<int>(SceneLayers::kUI)]->AttachChild(std::move(score_display));
 	}
 
-	std::string* p1_score_text = new std::string("0");
-	std::unique_ptr<TextNode> p1_score_display(new TextNode(m_fonts, *p1_score_text));
-	p1_score_display->setPosition({ 20.f, 20.f });
-	p1_score_display->setScale({ score_text_size, score_text_size });
-	p1_score_display->SetColor(sf::Color::Red);
-	p1_score_display->SetOutlineColor(sf::Color::Black);
-	p1_score_display->SetOutlineThickness(3.f);
-	m_score_displays.push_back(p1_score_display.get());
-	m_scene_layers[static_cast<int>(SceneLayers::kUI)]->AttachChild(std::move(p1_score_display));
+	//std::string* p1_score_text = new std::string("0");
+	//std::unique_ptr<TextNode> p1_score_display(new TextNode(m_fonts, *p1_score_text));
+	//p1_score_display->setPosition({ 20.f, 20.f });
+	//p1_score_display->setScale({ score_text_size, score_text_size });
+	//p1_score_display->SetColor(sf::Color::Red);
+	//p1_score_display->SetOutlineColor(sf::Color::Black);
+	//p1_score_display->SetOutlineThickness(3.f);
+	//m_score_displays.push_back(p1_score_display.get());
+	//m_scene_layers[static_cast<int>(SceneLayers::kUI)]->AttachChild(std::move(p1_score_display));
 
-	std::string* p2_score_text = new std::string("0");
-	std::unique_ptr<TextNode> p2_score_display(new TextNode(m_fonts, *p2_score_text));
-	p2_score_display->setPosition({ 20.f, 20.f + score_spacing });
-	p2_score_display->setScale({ score_text_size, score_text_size });
-	p2_score_display->SetColor(sf::Color::Yellow);
-	p2_score_display->SetOutlineColor(sf::Color::Black);
-	p2_score_display->SetOutlineThickness(3.f);
-	m_score_displays.push_back(p2_score_display.get());
-	m_scene_layers[static_cast<int>(SceneLayers::kUI)]->AttachChild(std::move(p2_score_display));
+	//std::string* p2_score_text = new std::string("0");
+	//std::unique_ptr<TextNode> p2_score_display(new TextNode(m_fonts, *p2_score_text));
+	//p2_score_display->setPosition({ 20.f, 20.f + score_spacing });
+	//p2_score_display->setScale({ score_text_size, score_text_size });
+	//p2_score_display->SetColor(sf::Color::Yellow);
+	//p2_score_display->SetOutlineColor(sf::Color::Black);
+	//p2_score_display->SetOutlineThickness(3.f);
+	//m_score_displays.push_back(p2_score_display.get());
+	//m_scene_layers[static_cast<int>(SceneLayers::kUI)]->AttachChild(std::move(p2_score_display));
 }
 
 void World::UpdateScoreDisplay()

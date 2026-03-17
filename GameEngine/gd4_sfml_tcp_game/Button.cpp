@@ -86,6 +86,23 @@ void gui::Button::Deactivate()
 
 void gui::Button::HandleEvent(const sf::Event& event)
 {
+    if (const auto* mouseReleased = event.getIf<sf::Event::MouseButtonReleased>())
+    {
+        if (mouseReleased->button == sf::Mouse::Button::Left)
+        {
+            const sf::Vector2f mousePos(
+                static_cast<float>(mouseReleased->position.x),
+                static_cast<float>(mouseReleased->position.y));
+
+            // Component transform + local sprite rect
+            const sf::FloatRect bounds = getTransform().transformRect(m_sprite.getLocalBounds());
+
+            if (bounds.contains(mousePos))
+            {
+                Activate();
+            }
+        }
+    }
 }
 
 void gui::Button::draw(sf::RenderTarget& target, sf::RenderStates states) const

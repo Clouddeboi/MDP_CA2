@@ -1,10 +1,30 @@
 #include "EditorState.hpp"
 #include "Utility.hpp"
 #include "TileRegistry.hpp"
+#include "LevelSerializer.hpp"
 #include <SFML/Graphics/RenderWindow.hpp>
 #include <SFML/Window/Event.hpp>
 #include <sstream>
 #include <iomanip>
+#include <ctime>
+#include <algorithm>
+
+namespace
+{
+	std::string GetCurrentDateString()
+	{
+		std::time_t now = std::time(nullptr);
+		std::tm localTime{};
+#ifdef _WIN32
+		localtime_s(&localTime, &now);
+#else
+		localTime = *std::localtime(&now);
+#endif
+		std::ostringstream os;
+		os << std::put_time(&localTime, "%Y-%m-%d");
+		return os.str();
+	}
+}
 
 EditorState::EditorState(StateStack& stack, Context context)
 	: State(stack, context)
@@ -25,6 +45,13 @@ EditorState::EditorState(StateStack& stack, Context context)
 	, m_is_deleting_tile(false)
 	, m_current_spawn_index(0)
 	, m_preview_sprite(context.textures->Get(TextureID::kEntities))
+	, m_gui_container()
+	, m_level_name_text(context.fonts->Get(Font::kMain), "", 16)
+	, m_saved_levels_text(context.fonts->Get(Font::kMain), "", 14)
+	, m_hint_text(context.fonts->Get(Font::kMain), "", 14)
+	, m_level_name_input("NewLevel")
+	, m_is_editing_level_name(false)
+	, m_selected_level_index(0)
 {
 	//Setup Editor View (initially matching window size)
 	sf::Vector2f windowSize = sf::Vector2f(context.window->getSize());
@@ -54,9 +81,53 @@ EditorState::EditorState(StateStack& stack, Context context)
 	m_ui_background.setFillColor(sf::Color(0, 0, 0, 200));
 	m_ui_background.setPosition({ 0.f, 0.f });
 
+	const float bottomPanelHeight = 120.f;
+	const float bottomY = windowSize.y - bottomPanelHeight;
+
 	//Initialize default level
 	m_level_data.m_world_bounds = sf::FloatRect({ 0.f, 0.f }, { 1600.f, 900.f });
 	m_level_data.m_metadata.m_grid_size = static_cast<int>(m_grid_size);
+
+	m_level_name_text.setPosition({ 10.f, bottomY + 10.f });
+	m_level_name_text.setFillColor(sf::Color::Cyan);
+
+	m_saved_levels_text.setPosition({ 360.f, bottomY + 10.f });
+	m_saved_levels_text.setFillColor(sf::Color(220, 220, 220));
+
+	m_hint_text.setPosition({ 10.f, 78.f });
+	m_hint_text.setFillColor(sf::Color(180, 180, 180));
+
+	//metadata defaults
+	m_level_data.m_metadata.m_level_name = m_level_name_input;
+	m_level_data.m_metadata.m_author = "EditorUser";
+	m_level_data.m_metadata.m_creation_date = GetCurrentDateString();
+
+	auto save_button = std::make_shared<gui::Button>(context);
+	save_button->setPosition({ 760.f, bottomY + 10.f });
+	save_button->SetText("Save (3)");
+	save_button->SetCallback([this]() { SaveCurrentLevel(); });
+
+	auto load_button = std::make_shared<gui::Button>(context);
+	load_button->setPosition({ 760.f, bottomY + 65.f });
+	load_button->SetText("Load (4)");
+	load_button->SetCallback([this]() { LoadSelectedLevel(); });
+
+	auto prev_level_button = std::make_shared<gui::Button>(context);
+	prev_level_button->setPosition({ 980.f, bottomY + 10.f });
+	prev_level_button->SetText("Prev (5)");
+	prev_level_button->SetCallback([this]() { SelectPreviousSavedLevel(); });
+
+	auto next_level_button = std::make_shared<gui::Button>(context);
+	next_level_button->setPosition({ 980.f, bottomY + 65.f });
+	next_level_button->SetText("Next (6)");
+	next_level_button->SetCallback([this]() { SelectNextSavedLevel(); });
+
+	m_gui_container.Pack(save_button);
+	m_gui_container.Pack(load_button);
+	m_gui_container.Pack(prev_level_button);
+	m_gui_container.Pack(next_level_button);
+
+	RefreshSavedLevels();
 
 	UpdateStatusText();
 }
@@ -94,8 +165,19 @@ void EditorState::Draw()
 	//Draw UI
 	window.setView(m_ui_view);
 	window.draw(m_ui_background);
+
+	//Bottom panel
+	sf::RectangleShape bottom_ui_background({ m_ui_view.getSize().x, 120.f });
+	bottom_ui_background.setFillColor(sf::Color(0, 0, 0, 200));
+	bottom_ui_background.setPosition({ 0.f, m_ui_view.getSize().y - 120.f });
+	window.draw(bottom_ui_background);
+
 	window.draw(m_status_text);
 	window.draw(m_mouse_pos_text);
+	window.draw(m_level_name_text);
+	window.draw(m_saved_levels_text);
+	window.draw(m_hint_text);
+	window.draw(m_gui_container);
 }
 
 bool EditorState::Update(sf::Time dt)
@@ -107,6 +189,47 @@ bool EditorState::Update(sf::Time dt)
 
 bool EditorState::HandleEvent(const sf::Event& event)
 {
+	if (const auto* textEntered = event.getIf<sf::Event::TextEntered>())
+	{
+		if (m_is_editing_level_name)
+		{
+			HandleTextEntered(textEntered->unicode);
+			UpdateStatusText();
+			return true;
+		}
+	}
+	if (const auto* keyPressed = event.getIf<sf::Event::KeyPressed>())
+	{
+		//naming mode toggles
+		if (keyPressed->code == sf::Keyboard::Key::F2)
+		{
+			m_is_editing_level_name = !m_is_editing_level_name;
+			UpdateStatusText();
+			return true;
+		}
+		if (keyPressed->code == sf::Keyboard::Key::Num3)
+		{
+			SaveCurrentLevel();
+			return true;
+		}
+		if (keyPressed->code == sf::Keyboard::Key::Num4)
+		{
+			LoadSelectedLevel();
+			return true;
+		}
+		if (keyPressed->code == sf::Keyboard::Key::Num5)
+		{
+			SelectPreviousSavedLevel();
+			return true;
+		}
+		if (keyPressed->code == sf::Keyboard::Key::Num6)
+		{
+			SelectNextSavedLevel();
+			return true;
+		}
+	}
+	m_gui_container.HandleEvent(event);
+
 	if (const auto* keyPressed = event.getIf<sf::Event::KeyPressed>())
 	{
 		//Press Escape to leave editor
@@ -182,11 +305,15 @@ bool EditorState::HandleEvent(const sf::Event& event)
 		}
 		else if (mousePressed->button == sf::Mouse::Button::Left)
 		{
+			const float topUiHeight = 100.f;
+			const float bottomUiHeight = 120.f;
+			const float uiHeight = m_ui_view.getSize().y;
+
 			//Check if clicking in UI area (top 100 pixels)
 			sf::Vector2f uiCoords = sf::Vector2f(GetContext().window->mapPixelToCoords(
 				sf::Vector2i(mousePressed->position.x, mousePressed->position.y), m_ui_view));
 
-			if (uiCoords.y > 100.f)//Only place if not clicking UI
+			if (uiCoords.y > topUiHeight && uiCoords.y < (uiHeight - bottomUiHeight))
 			{
 				m_is_placing_tile = true;
 				HandleTilePlacement();
@@ -534,6 +661,22 @@ void EditorState::UpdateStatusText()
 	ss << "\n[Tab] Cycle Tool | [L-Click] Draw | [R-Click] Erase";
 
 	m_status_text.setString(ss.str());
+
+	std::string nameLine = "Level Name: " + m_level_name_input;
+	if (m_is_editing_level_name)
+		nameLine += "  <typing>";
+	m_level_name_text.setString(nameLine);
+
+	std::stringstream levelList;
+	levelList << "Saved Levels (" << m_saved_levels.size() << ")\n";
+	for (int i = 0; i < static_cast<int>(m_saved_levels.size()) && i < 5; ++i)
+	{
+		const std::string display = LevelManager::GetLevelNameFromPath(m_saved_levels[i]);
+		levelList << ((i == m_selected_level_index) ? "> " : "  ") << display << "\n";
+	}
+	m_saved_levels_text.setString(levelList.str());
+
+	m_hint_text.setString("[F2] Rename  [3] Save  [4] Load  [5/6] Select Saved Level");
 }
 
 void EditorState::SelectNextTileType()
@@ -667,4 +810,110 @@ void EditorState::DrawTiles()
 		window.draw(visual);
 		window.draw(text);
 	}
+}
+
+void EditorState::HandleTextEntered(std::uint32_t unicode)
+{
+	// Enter
+	if (unicode == 13)
+	{
+		m_is_editing_level_name = false;
+		return;
+	}
+
+	// Backspace
+	if (unicode == 8)
+	{
+		if (!m_level_name_input.empty())
+		{
+			m_level_name_input.pop_back();
+		}
+		return;
+	}
+
+	// Printable ASCII
+	if (unicode >= 32 && unicode <= 126)
+	{
+		if (m_level_name_input.size() < 32)
+		{
+			m_level_name_input.push_back(static_cast<char>(unicode));
+		}
+	}
+}
+
+void EditorState::RefreshSavedLevels()
+{
+	m_level_manager.RefreshLevelList();
+	m_saved_levels = m_level_manager.GetAvailableLevels();
+
+	if (m_saved_levels.empty())
+	{
+		m_selected_level_index = 0;
+	}
+	else
+	{
+		m_selected_level_index = std::clamp(m_selected_level_index, 0, static_cast<int>(m_saved_levels.size()) - 1);
+	}
+}
+
+void EditorState::SelectNextSavedLevel()
+{
+	RefreshSavedLevels();
+	if (m_saved_levels.empty()) return;
+	m_selected_level_index = (m_selected_level_index + 1) % static_cast<int>(m_saved_levels.size());
+	UpdateStatusText();
+}
+
+void EditorState::SelectPreviousSavedLevel()
+{
+	RefreshSavedLevels();
+	if (m_saved_levels.empty()) return;
+	m_selected_level_index = (m_selected_level_index - 1 + static_cast<int>(m_saved_levels.size())) % static_cast<int>(m_saved_levels.size());
+	UpdateStatusText();
+}
+
+void EditorState::SaveCurrentLevel()
+{
+	if (m_level_data.m_player_spawns.size() < 2)
+	{
+		m_hint_text.setString("Save failed: place at least 2 player spawns.");
+		return;
+	}
+
+	if (m_level_name_input.empty())
+		m_level_name_input = "NewLevel";
+
+	m_level_data.m_metadata.m_level_name = m_level_name_input;
+	m_level_data.m_metadata.m_creation_date = GetCurrentDateString();
+	m_level_data.m_metadata.m_grid_size = static_cast<int>(m_grid_size);
+
+	const std::string filename = LevelSerializer::CreateFilename(m_level_name_input);
+	if (LevelSerializer::Save(m_level_data, filename))
+	{
+		m_current_filename = filename;
+		m_is_dirty = false;
+		RefreshSavedLevels();
+	}
+
+	UpdateStatusText();
+}
+
+void EditorState::LoadSelectedLevel()
+{
+	RefreshSavedLevels();
+	if (m_saved_levels.empty()) return;
+
+	const std::string& selectedPath = m_saved_levels[m_selected_level_index];
+	LevelData loaded;
+	if (LevelSerializer::Load(selectedPath, loaded))
+	{
+		m_level_data = loaded;
+		m_current_filename = selectedPath;
+		m_is_dirty = false;
+
+		if (!m_level_data.m_metadata.m_level_name.empty())
+			m_level_name_input = m_level_data.m_metadata.m_level_name;
+	}
+
+	UpdateStatusText();
 }
