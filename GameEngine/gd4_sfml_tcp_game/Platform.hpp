@@ -12,6 +12,19 @@ public:
         m_shape.setOrigin(size * 0.5f);
         m_shape.setFillColor(color);
     }
+    explicit Platform(const sf::Vector2f& size, sf::Texture& texture, const sf::IntRect& tileRect)
+        : SceneNode(ReceiverCategories::kPlatform)
+        , m_shape(size)
+    {
+        m_shape.setOrigin(size * 0.5f);
+        texture.setRepeated(false);
+        m_shape.setTexture(&texture);
+
+        const int repeatX = std::max(1, static_cast<int>(std::round(size.x / tileRect.size.x)));
+        const int repeatY = std::max(1, static_cast<int>(std::round(size.y / tileRect.size.y)));
+
+        m_shape.setTextureRect(tileRect);
+    }
 
     void SetSize(const sf::Vector2f& size)
     {

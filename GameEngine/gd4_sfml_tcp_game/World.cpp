@@ -11,6 +11,9 @@
 #include "TileRegistry.hpp"
 #include <iostream>
 #include <ctime>  
+#include <algorithm>
+#include <vector>
+#include <cmath>
 
 /*
  * Code implementation assisted by Claude Sonnet 4.5
@@ -904,10 +907,11 @@ void World::AddPlatformFromTile(const TileData& tile)
 
 	if (variantInfo)
 	{
-		//Use the specific variant texture
+		sf::Texture& tex = m_textures.Get(variantInfo->m_texture_id);
 		platform.reset(new Platform(
 			sf::Vector2f(tile.m_width, tile.m_height),
-			m_textures.Get(variantInfo->m_texture_id)
+			tex,
+			variantInfo->m_texture_rect
 		));
 	}
 	else
@@ -919,7 +923,10 @@ void World::AddPlatformFromTile(const TileData& tile)
 		));
 	}
 
-	platform->setPosition(tile.m_position);
+	platform->setPosition({
+	tile.m_position.x + tile.m_width * 0.5f,
+	tile.m_position.y + tile.m_height * 0.5f
+		});
 	m_scene_layers[static_cast<int>(SceneLayers::kUpperAir)]->AttachChild(std::move(platform));
 }
 
@@ -935,14 +942,20 @@ void World::AddBoxFromTile(const TileData& tile)
 	{
 		//Use the specific variant texture
 		std::unique_ptr<Box> box(new Box(boxSize, m_textures.Get(variantInfo->m_texture_id)));
-		box->setPosition(tile.m_position);
+		box->setPosition({
+			tile.m_position.x + tile.m_width * 0.5f,
+			tile.m_position.y + tile.m_height * 0.5f
+			});
 		m_scene_layers[static_cast<int>(SceneLayers::kUpperAir)]->AttachChild(std::move(box));
 	}
 	else
 	{
 		//Fallback to default box texture
 		std::unique_ptr<Box> box(new Box(boxSize, m_textures.Get(TextureID::kBox)));
-		box->setPosition(tile.m_position);
+		box->setPosition({
+			tile.m_position.x + tile.m_width * 0.5f,
+			tile.m_position.y + tile.m_height * 0.5f
+			});
 		m_scene_layers[static_cast<int>(SceneLayers::kUpperAir)]->AttachChild(std::move(box));
 	}
 }
@@ -952,19 +965,20 @@ void World::BuildSceneFromLevel()
 	std::cout << "Building scene from level data..." << std::endl;
 	std::cout << "Tiles to place: " << m_current_level_data.GetTileCount() << std::endl;
 
-	//Add all tiles from the level
+	// Build merged platforms first
+	BuildMergedPlatformsFromLevel();
+
 	for (const auto& tile : m_current_level_data.m_tiles)
 	{
 		switch (tile.m_type)
 		{
 		case TileType::kPlatform:
-			AddPlatformFromTile(tile);
+			AddPlatformVisualTilesFromTile(tile);
 			break;
 		case TileType::kBox:
 			AddBoxFromTile(tile);
 			break;
 		case TileType::kPlayerSpawn:
-			//Spawn points are handled separately
 			break;
 		default:
 			break;
@@ -1972,9 +1986,125 @@ void World::ClearStaticLevelGeometry()
 	clearBoxes.category = static_cast<int>(ReceiverCategories::kBox);
 	clearBoxes.action = DerivedAction<Entity>([](Entity& e, sf::Time) { e.Destroy(); });
 
-	// Apply immediately, not deferred via queue
 	m_scenegraph.OnCommand(clearPlatforms, sf::Time::Zero);
 	m_scenegraph.OnCommand(clearBoxes, sf::Time::Zero);
 	m_scenegraph.RemoveWrecks();
 }
 	
+void World::BuildMergedPlatformsFromLevel()
+{
+	struct PlatformRun
+	{
+		float y;
+		float height;
+		int variant;
+		float startX;
+		float endX;
+	};
+
+	std::vector<TileData> platformTiles;
+	platformTiles.reserve(m_current_level_data.m_tiles.size());
+
+	for (const auto& tile : m_current_level_data.m_tiles)
+	{
+		if (tile.m_type == TileType::kPlatform)
+			platformTiles.push_back(tile);
+	}
+
+	//Sort by row, then variant, then x
+	std::sort(platformTiles.begin(), platformTiles.end(),
+		[](const TileData& a, const TileData& b)
+		{
+			if (a.m_position.y != b.m_position.y) return a.m_position.y < b.m_position.y;
+			if (a.m_height != b.m_height) return a.m_height < b.m_height;
+			if (a.m_texture_variant != b.m_texture_variant) return a.m_texture_variant < b.m_texture_variant;
+			return a.m_position.x < b.m_position.x;
+		});
+
+	const float epsilon = 0.01f;
+	std::vector<PlatformRun> runs;
+
+	for (const auto& tile : platformTiles)
+	{
+		const float left = tile.m_position.x;
+		const float right = tile.m_position.x + tile.m_width;
+
+		if (runs.empty())
+		{
+			runs.push_back({ tile.m_position.y, tile.m_height, tile.m_texture_variant, left, right });
+			continue;
+		}
+
+		PlatformRun& last = runs.back();
+
+		const bool sameRow = std::abs(last.y - tile.m_position.y) < epsilon;
+		const bool sameHeight = std::abs(last.height - tile.m_height) < epsilon;
+		const bool sameVariant = last.variant == tile.m_texture_variant;
+		const bool touching = left <= (last.endX + epsilon);
+
+		if (sameRow && sameHeight && sameVariant && touching)
+		{
+			last.endX = std::max(last.endX, right);
+		}
+		else
+		{
+			runs.push_back({ tile.m_position.y, tile.m_height, tile.m_texture_variant, left, right });
+		}
+	}
+
+	//Spawn merged platforms
+	for (const auto& run : runs)
+	{
+		TileData merged;
+		merged.m_type = TileType::kPlatform;
+		merged.m_texture_variant = run.variant;
+		merged.m_position = { run.startX, run.y };
+		merged.m_width = run.endX - run.startX;
+		merged.m_height = run.height;
+
+		AddPlatformColliderFromTile(merged);
+	}
+}
+
+void World::AddPlatformColliderFromTile(const TileData& tile)
+{
+	//Invisible platform used only for collision
+	std::unique_ptr<Platform> platform(new Platform(
+		sf::Vector2f(tile.m_width, tile.m_height),
+		sf::Color(0, 0, 0, 0)
+	));
+
+	platform->setPosition({
+	tile.m_position.x + tile.m_width * 0.5f,
+	tile.m_position.y + tile.m_height * 0.5f
+		});
+	m_scene_layers[static_cast<int>(SceneLayers::kUpperAir)]->AttachChild(std::move(platform));
+}
+
+void World::AddPlatformVisualTilesFromTile(const TileData& tile)
+{
+	TileRegistry& registry = TileRegistry::GetInstance();
+	const TileVariantInfo* variantInfo = registry.GetVariant(TileType::kPlatform, tile.m_texture_variant);
+	if (!variantInfo)
+		return;
+
+	const sf::Texture& tex = m_textures.Get(variantInfo->m_texture_id);
+	const sf::IntRect rect = variantInfo->m_texture_rect;
+
+	const int tilesX = std::max(1, static_cast<int>(std::round(tile.m_width / static_cast<float>(rect.size.x))));
+	const int tilesY = std::max(1, static_cast<int>(std::round(tile.m_height / static_cast<float>(rect.size.y))));
+
+	//Assumes tile position is top left in level data
+	const float startX = tile.m_position.x;
+	const float startY = tile.m_position.y;
+
+	for (int y = 0; y < tilesY; ++y)
+	{
+		for (int x = 0; x < tilesX; ++x)
+		{
+			std::unique_ptr<SpriteNode> sprite(new SpriteNode(tex, rect));
+			sprite->setPosition({ startX + x * rect.size.x, startY + y * rect.size.y });
+			m_scene_layers[static_cast<int>(SceneLayers::kUpperAir)]->AttachChild(std::move(sprite));
+		}
+	}
+}

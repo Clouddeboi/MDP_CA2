@@ -101,6 +101,10 @@ private:
 	void SelectNextPreloadedLevel();
 	void ClearStaticLevelGeometry();
 
+	void BuildMergedPlatformsFromLevel();
+	void AddPlatformColliderFromTile(const TileData& tile);
+	void AddPlatformVisualTilesFromTile(const TileData& tile);
+
 private:
 	struct SpawnPoint
 	{
