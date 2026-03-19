@@ -94,7 +94,7 @@ EditorState::EditorState(StateStack& stack, Context context)
 	m_saved_levels_text.setPosition({ 360.f, bottomY + 10.f });
 	m_saved_levels_text.setFillColor(sf::Color(220, 220, 220));
 
-	m_hint_text.setPosition({ 10.f, 78.f });
+	m_hint_text.setPosition({ 10.f, bottomY + 88.f });
 	m_hint_text.setFillColor(sf::Color(180, 180, 180));
 
 	//metadata defaults
@@ -122,10 +122,22 @@ EditorState::EditorState(StateStack& stack, Context context)
 	next_level_button->SetText("Next (6)");
 	next_level_button->SetCallback([this]() { SelectNextSavedLevel(); });
 
+	auto rename_button = std::make_shared<gui::Button>(context);
+	rename_button->setPosition({ 1200.f, bottomY + 10.f });
+	rename_button->SetText("Rename (R)");
+	rename_button->SetCallback([this]() { BeginRenameLevel(); });
+
+	auto new_level_button = std::make_shared<gui::Button>(context);
+	new_level_button->setPosition({ 1200.f, bottomY + 65.f });
+	new_level_button->SetText("New (N)");
+	new_level_button->SetCallback([this]() { CreateNewLevel(); });
+
 	m_gui_container.Pack(save_button);
 	m_gui_container.Pack(load_button);
 	m_gui_container.Pack(prev_level_button);
 	m_gui_container.Pack(next_level_button);
+	m_gui_container.Pack(rename_button);
+	m_gui_container.Pack(new_level_button);
 
 	RefreshSavedLevels();
 
@@ -227,8 +239,32 @@ bool EditorState::HandleEvent(const sf::Event& event)
 			SelectNextSavedLevel();
 			return true;
 		}
+		if (keyPressed->code == sf::Keyboard::Key::R)
+		{
+			BeginRenameLevel();
+			return true;
+		}
+		if (keyPressed->code == sf::Keyboard::Key::N)
+		{
+			CreateNewLevel();
+			return true;
+		}
+		if (m_is_editing_level_name && keyPressed->code == sf::Keyboard::Key::Enter)
+		{
+			CommitRenameLevel();
+			return true;
+		}
+		if (m_is_editing_level_name && keyPressed->code == sf::Keyboard::Key::Escape)
+		{
+			m_is_editing_level_name = false;
+			UpdateStatusText();
+			return true;
+		}
 	}
-	m_gui_container.HandleEvent(event);
+	if (event.getIf<sf::Event::MouseButtonPressed>() || event.getIf<sf::Event::MouseButtonReleased>())
+	{
+		m_gui_container.HandleEvent(event);
+	}
 
 	if (const auto* keyPressed = event.getIf<sf::Event::KeyPressed>())
 	{
@@ -309,9 +345,13 @@ bool EditorState::HandleEvent(const sf::Event& event)
 			const float bottomUiHeight = 120.f;
 			const float uiHeight = m_ui_view.getSize().y;
 
-			//Check if clicking in UI area (top 100 pixels)
 			sf::Vector2f uiCoords = sf::Vector2f(GetContext().window->mapPixelToCoords(
 				sf::Vector2i(mousePressed->position.x, mousePressed->position.y), m_ui_view));
+
+			if (HandleUIButtonClick(uiCoords))
+			{
+				return true;
+			}
 
 			if (uiCoords.y > topUiHeight && uiCoords.y < (uiHeight - bottomUiHeight))
 			{
@@ -676,7 +716,7 @@ void EditorState::UpdateStatusText()
 	}
 	m_saved_levels_text.setString(levelList.str());
 
-	m_hint_text.setString("[F2] Rename  [3] Save  [4] Load  [5/6] Select Saved Level");
+	m_hint_text.setString("[R] Rename  [Enter] Apply Name  [N] New  [3] Save  [4] Load  [5/6] Select");
 }
 
 void EditorState::SelectNextTileType()
@@ -916,4 +956,70 @@ void EditorState::LoadSelectedLevel()
 	}
 
 	UpdateStatusText();
+}
+
+void EditorState::CreateNewLevel()
+{
+	m_level_data.Clear();
+	m_level_data.m_world_bounds = sf::FloatRect({ 0.f, 0.f }, { 1600.f, 900.f });
+	m_level_data.m_metadata.m_grid_size = static_cast<int>(m_grid_size);
+	m_level_data.m_metadata.m_level_name = "NewLevel";
+	m_level_data.m_metadata.m_creation_date = GetCurrentDateString();
+	m_level_data.m_metadata.m_author = "EditorUser";
+
+	m_level_name_input = "NewLevel";
+	m_current_filename.clear();
+	m_is_dirty = false;
+	m_current_spawn_index = 0;
+
+	UpdateStatusText();
+}
+
+void EditorState::BeginRenameLevel()
+{
+	m_is_editing_level_name = true;
+	UpdateStatusText();
+}
+
+void EditorState::CommitRenameLevel()
+{
+	if (m_level_name_input.empty())
+		m_level_name_input = "NewLevel";
+
+	m_level_data.m_metadata.m_level_name = m_level_name_input;
+	m_is_editing_level_name = false;
+	m_is_dirty = true;
+	UpdateStatusText();
+}
+
+bool EditorState::HandleUIButtonClick(const sf::Vector2f& uiCoords)
+{
+	struct UIButtonRect
+	{
+		sf::FloatRect rect;
+		std::function<void()> action;
+	};
+
+	const float panelY = m_ui_view.getSize().y - 120.f;
+
+	std::vector<UIButtonRect> buttons =
+	{
+		{ sf::FloatRect({760.f, panelY + 10.f}, {200.f, 50.f}), [this]() { SaveCurrentLevel(); } },
+		{ sf::FloatRect({760.f, panelY + 65.f}, {200.f, 50.f}), [this]() { LoadSelectedLevel(); } },
+		{ sf::FloatRect({980.f, panelY + 10.f}, {200.f, 50.f}), [this]() { SelectPreviousSavedLevel(); } },
+		{ sf::FloatRect({980.f, panelY + 65.f}, {200.f, 50.f}), [this]() { SelectNextSavedLevel(); } },
+		{ sf::FloatRect({1200.f, panelY + 10.f}, {200.f, 50.f}), [this]() { BeginRenameLevel(); } },
+		{ sf::FloatRect({1200.f, panelY + 65.f}, {200.f, 50.f}), [this]() { CreateNewLevel(); } }
+	};
+
+	for (const auto& b : buttons)
+	{
+		if (b.rect.contains(uiCoords))
+		{
+			b.action();
+			return true;
+		}
+	}
+
+	return false;
 }

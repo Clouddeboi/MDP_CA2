@@ -54,6 +54,11 @@ private:
 	void SelectPreviousSavedLevel();
 	void HandleTextEntered(std::uint32_t unicode);
 
+	void CreateNewLevel();
+	void BeginRenameLevel();
+	void CommitRenameLevel();
+	bool HandleUIButtonClick(const sf::Vector2f& uiCoords);
+
 	//Coordinates snapping helper
 	sf::Vector2f GetSnappedPosition(const sf::Vector2f& position) const;
 
