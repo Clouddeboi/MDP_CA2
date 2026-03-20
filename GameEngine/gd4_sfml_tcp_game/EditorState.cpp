@@ -405,17 +405,13 @@ void EditorState::HandleCameraMovement(sf::Time dt)
 	float panSpeed = 500.f * m_zoom_level * dt.asSeconds();
 	sf::Vector2f movement(0.f, 0.f);
 
-	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::W) 
-		|| sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Up))
+	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::W))
 		movement.y -= panSpeed;
-	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::S) 
-		|| sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Down))
+	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::S))
 		movement.y += panSpeed;
-	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::A) 
-		|| sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Left))
+	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::A))
 		movement.x -= panSpeed;
-	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::D) 
-		|| sf::Keyboard::isKeyPressed(sf::Keyboard::Key::Right))
+	if (sf::Keyboard::isKeyPressed(sf::Keyboard::Key::D))
 		movement.x += panSpeed;
 
 	if (movement.x != 0.f || movement.y != 0.f)
