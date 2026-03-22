@@ -52,7 +52,7 @@ EditorState::EditorState(StateStack& stack, Context context)
 	, m_level_name_input("NewLevel")
 	, m_is_editing_level_name(false)
 	, m_selected_level_index(0)
-	, m_sidebar_width(280.f)
+	, m_sidebar_width(360.f)
 {
 	//Setup Editor View (initially matching window size)
 	sf::Vector2f windowSize = sf::Vector2f(context.window->getSize());
@@ -66,8 +66,8 @@ EditorState::EditorState(StateStack& stack, Context context)
 	// Setup Status Text
 	m_status_text.setFont(context.fonts->Get(Font::kMain));
 	m_status_text.setString("Level Editor Mode - Empty Level");
-	m_status_text.setCharacterSize(18);
-	m_status_text.setPosition({ 10.f, 10.f });
+	m_status_text.setCharacterSize(14);
+	m_status_text.setPosition({ 12.f, 12.f });
 	m_status_text.setFillColor(sf::Color::White);
 
 	//Setup Mouse Position Text
@@ -84,18 +84,26 @@ EditorState::EditorState(StateStack& stack, Context context)
 
 	const float bottomPanelHeight = 120.f;
 	const float bottomY = windowSize.y - bottomPanelHeight;
+	const float panelLeft = m_sidebar_width + 16.f;
+	const float col1 = panelLeft + 610.f;
+	const float col2 = panelLeft + 780.f;
+	const float col3 = panelLeft + 950.f;
+	const float row1 = bottomY + 12.f;
+	const float row2 = bottomY + 66.f;
 
 	//Initialize default level
 	m_level_data.m_world_bounds = sf::FloatRect({ 0.f, 0.f }, { 1600.f, 900.f });
 	m_level_data.m_metadata.m_grid_size = static_cast<int>(m_grid_size);
 
-	m_level_name_text.setPosition({ 10.f, bottomY + 10.f });
+	m_level_name_text.setPosition({ panelLeft, bottomY + 10.f });
 	m_level_name_text.setFillColor(sf::Color::Cyan);
 
-	m_saved_levels_text.setPosition({ 360.f, bottomY + 10.f });
+	m_saved_levels_text.setPosition({ panelLeft + 220.f, bottomY + 10.f });
+	m_saved_levels_text.setCharacterSize(12);
 	m_saved_levels_text.setFillColor(sf::Color(220, 220, 220));
 
-	m_hint_text.setPosition({ 10.f, bottomY + 88.f });
+	m_hint_text.setPosition({ panelLeft, bottomY + 92.f });
+	m_hint_text.setCharacterSize(12);
 	m_hint_text.setFillColor(sf::Color(180, 180, 180));
 
 	//metadata defaults
@@ -104,40 +112,40 @@ EditorState::EditorState(StateStack& stack, Context context)
 	m_level_data.m_metadata.m_creation_date = GetCurrentDateString();
 
 	auto save_button = std::make_shared<gui::Button>(context);
-	save_button->setPosition({ 760.f, bottomY + 10.f });
-	save_button->SetText("Save (3)");
+	save_button->setPosition({ col1, row1 });
+	save_button->SetText("Save");
 	save_button->SetCallback([this]() { SaveCurrentLevel(); });
 
 	auto load_button = std::make_shared<gui::Button>(context);
-	load_button->setPosition({ 760.f, bottomY + 65.f });
-	load_button->SetText("Load (4)");
+	load_button->setPosition({ col1, row2 });
+	load_button->SetText("Load");
 	load_button->SetCallback([this]() { LoadSelectedLevel(); });
 
 	auto prev_level_button = std::make_shared<gui::Button>(context);
-	prev_level_button->setPosition({ 980.f, bottomY + 10.f });
-	prev_level_button->SetText("Prev (5)");
+	prev_level_button->setPosition({ col2, row1 });
+	prev_level_button->SetText("Prev");
 	prev_level_button->SetCallback([this]() { SelectPreviousSavedLevel(); });
 
 	auto next_level_button = std::make_shared<gui::Button>(context);
-	next_level_button->setPosition({ 980.f, bottomY + 65.f });
-	next_level_button->SetText("Next (6)");
+	next_level_button->setPosition({ col2, row2 });
+	next_level_button->SetText("Next");
 	next_level_button->SetCallback([this]() { SelectNextSavedLevel(); });
 
 	auto rename_button = std::make_shared<gui::Button>(context);
-	rename_button->setPosition({ 1200.f, bottomY + 10.f });
-	rename_button->SetText("Rename (R)");
+	rename_button->setPosition({ col3, row1 });
+	rename_button->SetText("Rename");
 	rename_button->SetCallback([this]() { BeginRenameLevel(); });
 
 	auto new_level_button = std::make_shared<gui::Button>(context);
-	new_level_button->setPosition({ 1200.f, bottomY + 65.f });
-	new_level_button->SetText("New (N)");
+	new_level_button->setPosition({ col3, row2 });
+	new_level_button->SetText("New");
 	new_level_button->SetCallback([this]() { CreateNewLevel(); });
 
-	m_sidebar_background.setPosition({ 0.f, 100.f });
-	m_sidebar_background.setSize({ m_sidebar_width, windowSize.y - 220.f });
-	m_sidebar_background.setFillColor(sf::Color(20, 20, 20, 220));
+	m_sidebar_background.setPosition({ 0.f, 0.f });
+	m_sidebar_background.setSize({ m_sidebar_width, windowSize.y });
+	m_sidebar_background.setFillColor(sf::Color(28, 28, 28, 230));
 	m_sidebar_background.setOutlineThickness(1.f);
-	m_sidebar_background.setOutlineColor(sf::Color(80, 80, 80));
+	m_sidebar_background.setOutlineColor(sf::Color(90, 90, 90));
 
 	BuildTileSidebar();
 
@@ -185,12 +193,11 @@ void EditorState::Draw()
 
 	//Draw UI
 	window.setView(m_ui_view);
-	window.draw(m_ui_background);
 
 	//Bottom panel
-	sf::RectangleShape bottom_ui_background({ m_ui_view.getSize().x, 120.f });
+	sf::RectangleShape bottom_ui_background({ m_ui_view.getSize().x - m_sidebar_width, 120.f });
 	bottom_ui_background.setFillColor(sf::Color(0, 0, 0, 200));
-	bottom_ui_background.setPosition({ 0.f, m_ui_view.getSize().y - 120.f });
+	bottom_ui_background.setPosition({ m_sidebar_width, m_ui_view.getSize().y - 120.f });
 	window.draw(bottom_ui_background);
 
 	DrawTileSidebar();
@@ -713,7 +720,30 @@ void EditorState::UpdateStatusText()
 
 	ss << "\n[Tab] Cycle Tool | [L-Click] Draw | [R-Click] Erase";
 
-	m_status_text.setString(ss.str());
+	auto WrapText = [](const std::string& text, std::size_t maxLen)
+		{
+			std::stringstream in(text);
+			std::stringstream out;
+			std::string word;
+			std::size_t lineLen = 0;
+
+			while (in >> word)
+			{
+				if (lineLen + word.size() + 1 > maxLen)
+				{
+					out << '\n';
+					lineLen = 0;
+				}
+				if (lineLen > 0) { out << ' '; lineLen++; }
+				out << word;
+				lineLen += word.size();
+			}
+			return out.str();
+		};
+
+	m_status_text.setCharacterSize(13);
+	m_status_text.setPosition({ 12.f, 12.f });
+	m_status_text.setString(WrapText(ss.str(), 38));
 
 	std::string nameLine = "Level Name: " + m_level_name_input;
 	if (m_is_editing_level_name)
@@ -1048,7 +1078,7 @@ void EditorState::BuildTileSidebar()
 	const float buttonSize = 42.f;
 	const float gap = 8.f;
 	const float labelHeight = 14.f;
-	const float startY = 112.f;
+	const float startY = 170.f;
 
 	const float usableWidth = m_sidebar_width - (leftPadding * 2.f);
 	const int columns = std::max(1, static_cast<int>((usableWidth + gap) / (buttonSize + gap)));
