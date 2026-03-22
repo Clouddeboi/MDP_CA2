@@ -52,6 +52,7 @@ EditorState::EditorState(StateStack& stack, Context context)
 	, m_level_name_input("NewLevel")
 	, m_is_editing_level_name(false)
 	, m_selected_level_index(0)
+	, m_sidebar_width(280.f)
 {
 	//Setup Editor View (initially matching window size)
 	sf::Vector2f windowSize = sf::Vector2f(context.window->getSize());
@@ -132,6 +133,14 @@ EditorState::EditorState(StateStack& stack, Context context)
 	new_level_button->SetText("New (N)");
 	new_level_button->SetCallback([this]() { CreateNewLevel(); });
 
+	m_sidebar_background.setPosition({ 0.f, 100.f });
+	m_sidebar_background.setSize({ m_sidebar_width, windowSize.y - 220.f });
+	m_sidebar_background.setFillColor(sf::Color(20, 20, 20, 220));
+	m_sidebar_background.setOutlineThickness(1.f);
+	m_sidebar_background.setOutlineColor(sf::Color(80, 80, 80));
+
+	BuildTileSidebar();
+
 	m_gui_container.Pack(save_button);
 	m_gui_container.Pack(load_button);
 	m_gui_container.Pack(prev_level_button);
@@ -183,6 +192,8 @@ void EditorState::Draw()
 	bottom_ui_background.setFillColor(sf::Color(0, 0, 0, 200));
 	bottom_ui_background.setPosition({ 0.f, m_ui_view.getSize().y - 120.f });
 	window.draw(bottom_ui_background);
+
+	DrawTileSidebar();
 
 	window.draw(m_status_text);
 	window.draw(m_mouse_pos_text);
@@ -352,8 +363,14 @@ bool EditorState::HandleEvent(const sf::Event& event)
 			{
 				return true;
 			}
+			if (HandleTileSidebarClick(uiCoords))
+			{
+				return true;
+			}
 
-			if (uiCoords.y > topUiHeight && uiCoords.y < (uiHeight - bottomUiHeight))
+			if (uiCoords.x > m_sidebar_width &&
+				uiCoords.y > topUiHeight &&
+				uiCoords.y < (uiHeight - bottomUiHeight))
 			{
 				m_is_placing_tile = true;
 				HandleTilePlacement();
@@ -1017,5 +1034,119 @@ bool EditorState::HandleUIButtonClick(const sf::Vector2f& uiCoords)
 		}
 	}
 
+	return false;
+}
+
+void EditorState::BuildTileSidebar()
+{
+	m_sidebar_headers.clear();
+	m_sidebar_entries.clear();
+
+	auto& registry = TileRegistry::GetInstance();
+
+	const float leftPadding = 10.f;
+	const float buttonSize = 42.f;
+	const float gap = 8.f;
+	const float labelHeight = 14.f;
+	const float startY = 112.f;
+
+	const float usableWidth = m_sidebar_width - (leftPadding * 2.f);
+	const int columns = std::max(1, static_cast<int>((usableWidth + gap) / (buttonSize + gap)));
+
+	float y = startY;
+
+	for (TileType type : registry.GetAllTileTypes())
+	{
+		const int variantCount = registry.GetVariantCount(type);
+		if (variantCount <= 0)
+			continue;
+
+		m_sidebar_headers.push_back({ registry.GetTileTypeName(type), y });
+		y += 20.f;
+
+		for (int v = 0; v < variantCount; ++v)
+		{
+			const int col = v % columns;
+			const int row = v / columns;
+
+			const float xPos = leftPadding + col * (buttonSize + gap);
+			const float yPos = y + row * (buttonSize + labelHeight + gap);
+
+			const auto* varInfo = registry.GetVariant(type, v);
+			const std::string label = varInfo ? varInfo->m_variant_name : ("Variant " + std::to_string(v));
+
+			m_sidebar_entries.push_back({
+				type,
+				v,
+				sf::FloatRect({ xPos, yPos }, { buttonSize, buttonSize }),
+				label
+				});
+		}
+
+		const int rows = (variantCount + columns - 1) / columns;
+		y += rows * (buttonSize + labelHeight + gap) + 10.f;
+	}
+}
+
+void EditorState::DrawTileSidebar()
+{
+	auto& window = *GetContext().window;
+	auto& registry = TileRegistry::GetInstance();
+
+	window.draw(m_sidebar_background);
+
+	for (const auto& header : m_sidebar_headers)
+	{
+		sf::Text text(GetContext().fonts->Get(Font::kMain), header.m_title, 14);
+		text.setPosition({ 10.f, header.m_y });
+		text.setFillColor(sf::Color::White);
+		window.draw(text);
+	}
+
+	for (const auto& entry : m_sidebar_entries)
+	{
+		sf::RectangleShape button(entry.m_button_rect.size);
+		button.setPosition(entry.m_button_rect.position);
+		button.setFillColor(sf::Color::White);
+		button.setOutlineThickness(1.f);
+
+		const bool selected = (entry.m_type == m_current_tile_type && entry.m_variant == m_current_variant);
+		button.setOutlineColor(selected ? sf::Color::Yellow : sf::Color(100, 100, 100));
+
+		const auto* varInfo = registry.GetVariant(entry.m_type, entry.m_variant);
+		if (varInfo)
+		{
+			button.setTexture(&GetContext().textures->Get(varInfo->m_texture_id));
+			button.setTextureRect(varInfo->m_texture_rect);
+		}
+
+		window.draw(button);
+
+		sf::Text label(GetContext().fonts->Get(Font::kMain), entry.m_label, 10);
+		label.setPosition({ entry.m_button_rect.position.x, entry.m_button_rect.position.y + entry.m_button_rect.size.y + 1.f });
+		label.setFillColor(sf::Color(200, 200, 200));
+		window.draw(label);
+	}
+}
+
+bool EditorState::HandleTileSidebarClick(const sf::Vector2f& uiCoords)
+{
+	for (const auto& entry : m_sidebar_entries)
+	{
+		if (entry.m_button_rect.contains(uiCoords))
+		{
+			m_current_tile_type = entry.m_type;
+			m_current_variant = entry.m_variant;
+
+			if (const auto* info = TileRegistry::GetInstance().GetTileTypeInfo(m_current_tile_type))
+			{
+				m_current_tile_width = m_grid_size;
+				m_current_tile_height = m_grid_size;
+			}
+
+			UpdateStatusText();
+			return true;
+		}
+	}
 	return false;
 }

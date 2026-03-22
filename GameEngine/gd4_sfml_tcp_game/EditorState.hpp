@@ -59,10 +59,29 @@ private:
 	void CommitRenameLevel();
 	bool HandleUIButtonClick(const sf::Vector2f& uiCoords);
 
+	//Sidebar
+	void BuildTileSidebar();
+	void DrawTileSidebar();
+	bool HandleTileSidebarClick(const sf::Vector2f& uiCoords);
+
 	//Coordinates snapping helper
 	sf::Vector2f GetSnappedPosition(const sf::Vector2f& position) const;
 
 private:
+	struct SidebarHeader
+	{
+		std::string m_title;
+		float m_y;
+	};
+
+	struct SidebarEntry
+	{
+		TileType m_type;
+		int m_variant;
+		sf::FloatRect m_button_rect;
+		std::string m_label;
+	};
+
 	//Level Editor Data
 	LevelData m_level_data;
 	LevelManager m_level_manager;
@@ -113,4 +132,10 @@ private:
 	sf::Vector2f m_preview_pos;
 	sf::Sprite m_preview_sprite;
 	int m_current_spawn_index;
+
+	//Sidebar members
+	sf::RectangleShape m_sidebar_background;
+	float m_sidebar_width;
+	std::vector<SidebarHeader> m_sidebar_headers;
+	std::vector<SidebarEntry> m_sidebar_entries;
 };

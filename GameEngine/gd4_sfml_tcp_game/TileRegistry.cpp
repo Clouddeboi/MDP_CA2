@@ -18,25 +18,25 @@ void TileRegistry::Initialize()
 		platformInfo.m_variants.emplace_back(
 			TextureID::kPlatform,
 			sf::IntRect({ 0, 0 }, { 18, 18 }),
-			"Platform Single"
+			"P1_S"
 		);
 
 		platformInfo.m_variants.emplace_back(
 			TextureID::kPlatform,
 			sf::IntRect({ 18, 0 }, { 18, 18 }),
-			"Platform Left"
+			"P1_L"
 		);
 
 		platformInfo.m_variants.emplace_back(
 			TextureID::kPlatform,
 			sf::IntRect({ 36, 0 }, { 18, 18 }),
-			"Platform Middle"
+			"P1_M"
 		);
 
 		platformInfo.m_variants.emplace_back(
 			TextureID::kPlatform,
 			sf::IntRect({ 54, 0 }, { 18, 18 }),
-			"Platform Right"
+			"P1_R"
 		);
 
 		m_tile_types.push_back(platformInfo);
