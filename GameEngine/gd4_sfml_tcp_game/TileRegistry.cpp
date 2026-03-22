@@ -12,57 +12,61 @@ void TileRegistry::Initialize()
 
 	//Register Platform tile type
 	{
-		TileTypeInfo platformInfo(TileType::kPlatform, "Platform", 128.f, 32.f);
+		TileTypeInfo platformInfo(TileType::kPlatform, "Platform", 18.f, 18.f);
 
-		//Basic Platform parts
-		platformInfo.m_variants.emplace_back(
-			TextureID::kPlatform,
-			sf::IntRect({ 0, 0 }, { 18, 18 }),
-			"P1_S"
-		);
+		platformInfo.m_variants.emplace_back(TextureID::kPlatform, sf::IntRect({ 0,   0 }, { 18, 18 }), "P1_S");
+		platformInfo.m_variants.emplace_back(TextureID::kPlatform, sf::IntRect({ 18,  0 }, { 18, 18 }), "P1_L");
+		platformInfo.m_variants.emplace_back(TextureID::kPlatform, sf::IntRect({ 36,  0 }, { 18, 18 }), "P1_M");
+		platformInfo.m_variants.emplace_back(TextureID::kPlatform, sf::IntRect({ 54,  0 }, { 18, 18 }), "P1_R");
 
-		platformInfo.m_variants.emplace_back(
-			TextureID::kPlatform,
-			sf::IntRect({ 18, 0 }, { 18, 18 }),
-			"P1_L"
-		);
+		platformInfo.m_variants.emplace_back(TextureID::kPlatform, sf::IntRect({ 0,  18 }, { 18, 18 }), "P2_S");
+		platformInfo.m_variants.emplace_back(TextureID::kPlatform, sf::IntRect({ 18, 18 }, { 18, 18 }), "P2_L");
+		platformInfo.m_variants.emplace_back(TextureID::kPlatform, sf::IntRect({ 36, 18 }, { 18, 18 }), "P2_M");
+		platformInfo.m_variants.emplace_back(TextureID::kPlatform, sf::IntRect({ 54, 18 }, { 18, 18 }), "P2_R");
 
-		platformInfo.m_variants.emplace_back(
-			TextureID::kPlatform,
-			sf::IntRect({ 36, 0 }, { 18, 18 }),
-			"P1_M"
-		);
+		platformInfo.m_variants.emplace_back(TextureID::kPlatform, sf::IntRect({ 0,  36 }, { 18, 18 }), "P3_S");
+		platformInfo.m_variants.emplace_back(TextureID::kPlatform, sf::IntRect({ 18, 36 }, { 18, 18 }), "P3_L");
+		platformInfo.m_variants.emplace_back(TextureID::kPlatform, sf::IntRect({ 36, 36 }, { 18, 18 }), "P3_M");
+		platformInfo.m_variants.emplace_back(TextureID::kPlatform, sf::IntRect({ 54, 36 }, { 18, 18 }), "P3_R");
 
-		platformInfo.m_variants.emplace_back(
-			TextureID::kPlatform,
-			sf::IntRect({ 54, 0 }, { 18, 18 }),
-			"P1_R"
-		);
+		platformInfo.m_variants.emplace_back(TextureID::kPlatform, sf::IntRect({ 0,  54 }, { 18, 18 }), "P4_S");
+		platformInfo.m_variants.emplace_back(TextureID::kPlatform, sf::IntRect({ 18, 54 }, { 18, 18 }), "P4_L");
+		platformInfo.m_variants.emplace_back(TextureID::kPlatform, sf::IntRect({ 36, 54 }, { 18, 18 }), "P4_M");
+		platformInfo.m_variants.emplace_back(TextureID::kPlatform, sf::IntRect({ 54, 54 }, { 18, 18 }), "P4_R");
+
+		platformInfo.m_variants.emplace_back(TextureID::kPlatform, sf::IntRect({ 0,  72 }, { 18, 18 }), "P5_S");
+		platformInfo.m_variants.emplace_back(TextureID::kPlatform, sf::IntRect({ 18, 72 }, { 18, 18 }), "P5_L");
+		platformInfo.m_variants.emplace_back(TextureID::kPlatform, sf::IntRect({ 36, 72 }, { 18, 18 }), "P5_M");
+		platformInfo.m_variants.emplace_back(TextureID::kPlatform, sf::IntRect({ 54, 72 }, { 18, 18 }), "P5_R");
+
+		platformInfo.m_variants.emplace_back(TextureID::kPlatform, sf::IntRect({ 0,  90 }, { 18, 18 }), "P6_S");
+		platformInfo.m_variants.emplace_back(TextureID::kPlatform, sf::IntRect({ 18, 90 }, { 18, 18 }), "P6_L");
+		platformInfo.m_variants.emplace_back(TextureID::kPlatform, sf::IntRect({ 36, 90 }, { 18, 18 }), "P6_M");
+		platformInfo.m_variants.emplace_back(TextureID::kPlatform, sf::IntRect({ 54, 90 }, { 18, 18 }), "P6_R");
+
+		platformInfo.m_variants.emplace_back(TextureID::kPlatform, sf::IntRect({ 0, 108 }, { 18, 18 }), "P7_S");
+		platformInfo.m_variants.emplace_back(TextureID::kPlatform, sf::IntRect({ 18,108 }, { 18, 18 }), "P7_L");
+		platformInfo.m_variants.emplace_back(TextureID::kPlatform, sf::IntRect({ 36,108 }, { 18, 18 }), "P7_M");
+		platformInfo.m_variants.emplace_back(TextureID::kPlatform, sf::IntRect({ 54,108 }, { 18, 18 }), "P7_R");
+
+		platformInfo.m_variants.emplace_back(TextureID::kPlatform, sf::IntRect({ 0, 126 }, { 18, 18 }), "P8_S");
+		platformInfo.m_variants.emplace_back(TextureID::kPlatform, sf::IntRect({ 18,126 }, { 18, 18 }), "P8_L");
+		platformInfo.m_variants.emplace_back(TextureID::kPlatform, sf::IntRect({ 36,126 }, { 18, 18 }), "P8_M");
+		platformInfo.m_variants.emplace_back(TextureID::kPlatform, sf::IntRect({ 54,126 }, { 18, 18 }), "P8_R");
+
+		platformInfo.m_variants.emplace_back(TextureID::kPlatform, sf::IntRect({ 72,0 }, { 18, 18 }), "P9_L");
+		platformInfo.m_variants.emplace_back(TextureID::kPlatform, sf::IntRect({ 90,0 }, { 18, 18 }), "P9_R");
+		platformInfo.m_variants.emplace_back(TextureID::kPlatform, sf::IntRect({ 72,18 }, { 18, 18 }), "P10_L");
+		platformInfo.m_variants.emplace_back(TextureID::kPlatform, sf::IntRect({ 90,18 }, { 18, 18 }), "P10_R");
 
 		m_tile_types.push_back(platformInfo);
 	}
 
 	//Box tile type (just keep is as the original for now)
 	{
-		TileTypeInfo boxInfo(TileType::kBox, "Box", 64.f, 64.f);
+		TileTypeInfo boxInfo(TileType::kBox, "Box", 18.f, 18.f);
 
-		boxInfo.m_variants.emplace_back(
-			TextureID::kBox,
-			sf::IntRect({ 0, 0 }, { 64, 64 }),
-			"Wooden Crate"
-		);
-
-		boxInfo.m_variants.emplace_back(
-			TextureID::kBox,
-			sf::IntRect({ 64, 0 }, { 64, 64 }),
-			"Metal Crate"
-		);
-
-		boxInfo.m_variants.emplace_back(
-			TextureID::kBox,
-			sf::IntRect({ 128, 0 }, { 64, 64 }),
-			"Stone Crate"
-		);
+		boxInfo.m_variants.emplace_back(TextureID::kBox, sf::IntRect({ 108, 18 }, { 18, 18 }), "C1");
 
 		m_tile_types.push_back(boxInfo);
 	}
@@ -72,11 +76,7 @@ void TileRegistry::Initialize()
 		TileTypeInfo spawnInfo(TileType::kPlayerSpawn, "Player Spawn", 18.f, 18.f);
 
 		//Player spawns don't need texture variants, they're just markers
-		spawnInfo.m_variants.emplace_back(
-			TextureID::kEntities,
-			sf::IntRect({ 0, 0 }, { 18, 18 }),
-			"Spawn Point"
-		);
+		spawnInfo.m_variants.emplace_back(TextureID::kEntities, sf::IntRect({ 0, 0 }, { 18, 18 }), "Spawn Point");
 
 		m_tile_types.push_back(spawnInfo);
 	}

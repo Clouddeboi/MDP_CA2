@@ -30,7 +30,7 @@ Application::Application() : m_window(sf::VideoMode({ 1600, 900 }), "States", sf
 
 	m_textures.Load(TextureID::kPlatform, "Media/Textures/Sprite_Sheet/tilemap.png");
 	m_textures.Load(TextureID::kEntities, "Media/Textures/Sprite_Sheet/tilemap.png");
-	m_textures.Load(TextureID::kBox, "Media/Textures/crate_tile.png");
+	m_textures.Load(TextureID::kBox, "Media/Textures/Sprite_Sheet/tilemap.png");
 
 	RegisterStates();
 	m_stack.PushState(StateID::kTitle);
