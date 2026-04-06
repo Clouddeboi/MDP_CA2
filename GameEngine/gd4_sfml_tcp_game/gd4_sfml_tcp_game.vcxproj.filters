@@ -22,6 +22,15 @@
     <Filter Include="Shaders\Vertex">
       <UniqueIdentifier>{a0ed2b1c-c886-42a8-a9bc-f8fbb118eefc}</UniqueIdentifier>
     </Filter>
+    <Filter Include="Network">
+      <UniqueIdentifier>{10416fb6-db9c-431f-951c-0ea02dcaef1f}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Network\Header Files">
+      <UniqueIdentifier>{ece62798-4d54-4dcc-9dd9-2644ecaef721}</UniqueIdentifier>
+    </Filter>
+    <Filter Include="Network\Source Files">
+      <UniqueIdentifier>{8cc70770-0451-434d-aa3a-54976769adb4}</UniqueIdentifier>
+    </Filter>
   </ItemGroup>
   <ItemGroup>
     <ClCompile Include="Main.cpp">
@@ -170,6 +179,42 @@
     </ClCompile>
     <ClCompile Include="EditorState.cpp">
       <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Network\Client.cpp">
+      <Filter>Network\Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Network\MemoryBitStream.cpp">
+      <Filter>Network\Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Network\MemoryStream.cpp">
+      <Filter>Network\Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Network\player.cpp">
+      <Filter>Network\Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Network\Server.cpp">
+      <Filter>Network\Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Network\SocketAddress.cpp">
+      <Filter>Network\Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Network\SocketAddressFactory.cpp">
+      <Filter>Network\Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Network\SocketUtil.cpp">
+      <Filter>Network\Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Network\SocketWrapperPCH.cpp">
+      <Filter>Network\Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Network\StringUtils.cpp">
+      <Filter>Network\Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Network\TCPSocket.cpp">
+      <Filter>Network\Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Network\UDPSocket.cpp">
+      <Filter>Network\Source Files</Filter>
     </ClCompile>
   </ItemGroup>
   <ItemGroup>
@@ -388,6 +433,54 @@
     </ClInclude>
     <ClInclude Include="EditorState.hpp">
       <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Network\ByteSwap.hpp">
+      <Filter>Network\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Network\choice.hpp">
+      <Filter>Network\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Network\Client.hpp">
+      <Filter>Network\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Network\constants.hpp">
+      <Filter>Network\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Network\Math.hpp">
+      <Filter>Network\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Network\MemoryBitStream.hpp">
+      <Filter>Network\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Network\MemoryStream.hpp">
+      <Filter>Network\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Network\Server.hpp">
+      <Filter>Network\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Network\SocketAddress.hpp">
+      <Filter>Network\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Network\SocketAddressFactory.hpp">
+      <Filter>Network\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Network\SocketUtil.hpp">
+      <Filter>Network\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Network\SocketWrapperPCH.hpp">
+      <Filter>Network\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Network\SocketWrapperShared.hpp">
+      <Filter>Network\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Network\StringUtils.hpp">
+      <Filter>Network\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Network\TCPSocket.hpp">
+      <Filter>Network\Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Network\UDPSocket.hpp">
+      <Filter>Network\Header Files</Filter>
     </ClInclude>
   </ItemGroup>
   <ItemGroup>
