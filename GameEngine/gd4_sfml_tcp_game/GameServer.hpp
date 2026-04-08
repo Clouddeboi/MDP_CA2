@@ -4,9 +4,14 @@
 #include <SFML/Network/TcpListener.hpp>
 #include <SFML/System/Clock.hpp>
 #include <SFML/Graphics/Rect.hpp>
+#include <SFML/Network/Packet.hpp>
 #include <thread>
 #include <cstdint>
 #include <map>
+#include <atomic>
+#include <memory>
+#include <string>
+#include <vector>
 
 class GameServer
 {

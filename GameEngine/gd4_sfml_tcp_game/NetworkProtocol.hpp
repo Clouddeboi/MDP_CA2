@@ -1,9 +1,11 @@
 #pragma once
 #include <SFML/System/Vector2.hpp>
+#include <cstdint>
+
 const unsigned short SERVER_PORT = 50000; //Greater than 49151, in dynamic port range
 namespace Server
 {
-	enum class PacketType
+	enum class PacketType : std::uint8_t
 	{
 		kBroadcastMessage, //Takes a std::string and sends it to all clients, they show on their screens for a number of seconds
 		kInitialState, //takes two float values, the world height, and the initial scrolling in the world, then sf::Int32 with the number of aircraft, then for each aircraft its identifier, position, health and missiles
@@ -22,7 +24,7 @@ namespace Server
 
 namespace Client
 {
-	enum class PacketType
+	enum class PacketType : std::uint8_t
 	{
 		kPlayerEvent, // Two sf::Int32, aircraft identifer and event. It is used to request the server to trigger an event on the aircraft
 		kPlayerRealtimeChange, // The same kPlayerEvent, additionally takes a boolean for real time action

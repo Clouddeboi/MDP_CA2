@@ -1,14 +1,14 @@
 #include "GameServer.hpp"
 #include "NetworkProtocol.hpp"
 #include "AircraftType.hpp"
-#include "utility.hpp"
+#include "Utility.hpp"
 #include <SFML/Network/Packet.hpp>
 #include <SFML/System/Sleep.hpp>
 #include "PickupType.hpp"
 #include <iostream>
 
 GameServer::GameServer(sf::Vector2f battlefield_size)
-    : m_thread(&GameServer::ExecutionThread, this)
+    : m_thread()
     , m_listening_state(false)
     , m_client_timeout(sf::seconds(1.f))
     , m_max_connected_players(20)
@@ -25,12 +25,17 @@ GameServer::GameServer(sf::Vector2f battlefield_size)
 {
     m_listener_socket.setBlocking(false);
     m_peers[0].reset(new RemotePeer);
+
+    m_thread = std::thread(&GameServer::ExecutionThread, this);
 }
 
 GameServer::~GameServer()
 {
     m_waiting_thread_end = true;
-    m_thread.join();
+    if (m_thread.joinable())
+    {
+        m_thread.join();
+    }
 }
 
 void GameServer::NotifyPlayerSpawn(uint8_t aircraft_identifier)
