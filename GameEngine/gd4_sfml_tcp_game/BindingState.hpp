@@ -4,6 +4,7 @@
 #include "InputDevice.hpp"
 #include "PlayerBindingManager.hpp"
 #include "PlayerBindingDisplay.hpp"
+#include "NetworkSession.hpp" 
 #include <SFML/Graphics/Sprite.hpp>
 #include <SFML/Graphics/Text.hpp>
 #include <vector>
@@ -48,4 +49,9 @@ private:
 
 	std::vector<sf::Color> m_all_colors;
 	std::vector<bool> m_color_taken;
+
+	bool m_network_mode = false;
+	int m_local_player_index = 0;
+	int m_last_sent_color = -1;
+	bool m_last_sent_ready = false;
 };

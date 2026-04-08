@@ -2,6 +2,7 @@
 #include "ResourceHolder.hpp"
 #include "Utility.hpp"
 #include "PlayerBindingConfig.hpp"
+#include "NetworkSession.hpp" 
 #include <SFML/Graphics/RenderWindow.hpp>
 #include <iostream>
 
@@ -99,6 +100,23 @@ BindingState::BindingState(StateStack& stack, Context context)
 	m_color_taken.resize(m_all_colors.size(), false);
 
 	std::cout << "[BindingState] Grid-based player lobby initialized (max " << kMaxPlayers << " players)\n";
+
+	m_network_mode = (GetContext().network && GetContext().network->IsActive());
+	if (m_network_mode)
+	{
+		m_joined_players.clear();
+
+		AddPlayer(InputDeviceInfo(InputDeviceType::kKeyboardMouse, -1)); // slot 0
+		AddPlayer(InputDeviceInfo(InputDeviceType::kKeyboardMouse, -1)); // slot 1
+
+		m_local_player_index = GetContext().network->IsHosting() ? 0 : 1;
+
+		m_player_slots[0].ShowColorPicker(false);
+		m_player_slots[1].ShowColorPicker(false);
+		m_player_slots[m_local_player_index].ShowColorPicker(true);
+
+		m_instructions_text->setString("Network lobby: choose color and ready up");
+	}
 }
 
 void BindingState::Draw()
@@ -212,7 +230,7 @@ bool BindingState::Update(sf::Time dt)
 		{
 			std::string msg = "Press any input to join (" + std::to_string(GetJoinedPlayerCount()) + "/" + std::to_string(kMaxPlayers) + ")";
 			m_instructions_text->setString(msg);
-			m_instructions_text->setFillColor(sf::Color::Cyan);
+		 m_instructions_text->setFillColor(sf::Color::Cyan);
 		}
 		else
 		{
@@ -220,6 +238,38 @@ bool BindingState::Update(sf::Time dt)
 			m_instructions_text->setFillColor(sf::Color::Cyan);
 		}
 		Utility::CentreOrigin(*m_instructions_text);
+	}
+	
+	// Network communication for lobby binding state
+	if (m_network_mode && GetContext().network)
+	{
+		GetContext().network->PollLobbyPackets();
+
+		int player = -1, color = -1; bool ready = false;
+		if (GetContext().network->ConsumeRemoteBindingState(player, color, ready))
+		{
+			if (player >= 0 && player < static_cast<int>(m_player_slots.size()))
+			{
+				if (color >= 0) m_player_slots[player].SelectColorAtIndex(color);
+				m_player_slots[player].SetReady(ready);
+			}
+		}
+
+		if (GetContext().network->ConsumeStartGameSignal())
+		{
+			RequestStackPop();
+			RequestStackPush(StateID::kGame);
+			return false;
+		}
+
+		const int localColor = m_player_slots[m_local_player_index].GetSelectedColorIndex();
+		const bool localReady = m_player_slots[m_local_player_index].IsReady();
+		if (localColor != m_last_sent_color || localReady != m_last_sent_ready)
+		{
+			GetContext().network->SendLobbyBindingState(localColor, localReady);
+			m_last_sent_color = localColor;
+			m_last_sent_ready = localReady;
+		}
 	}
 	
 	return true;

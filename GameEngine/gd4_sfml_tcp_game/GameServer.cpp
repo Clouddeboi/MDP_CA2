@@ -328,6 +328,28 @@ void GameServer::HandleIncomingPackets(sf::Packet& packet, RemotePeer& receiving
         }
     }
     break;
+    case Client::PacketType::kLobbyBindingState:
+    {
+        int32_t color = -1; bool ready = false;
+        packet >> color >> ready;
+
+        {
+            std::scoped_lock lock(m_lobby_mutex);
+            m_client_lobby_color = static_cast<int>(color);
+            m_client_lobby_ready = ready;
+            m_has_client_lobby_state = true;
+        }
+
+        BroadcastLobbyBindingState(1, static_cast<int>(color), ready);//Relay client state
+    }
+    break;
+
+    case Client::PacketType::kLobbyStartGameRequest:
+    {
+        std::scoped_lock lock(m_lobby_mutex);
+        m_client_start_requested = true;
+    }
+    break;
     case Client::PacketType::kGameEvent:
     {
         uint8_t action;
@@ -501,4 +523,37 @@ GameServer::RemotePeer::RemotePeer()
     , m_timed_out(false)
 {
     m_socket.setBlocking(false);
+}
+
+void GameServer::BroadcastLobbyBindingState(uint8_t playerIndex, int colorIndex, bool ready)
+{
+    sf::Packet p;
+    p << static_cast<uint8_t>(Server::PacketType::kLobbyBindingState);
+    p << playerIndex << static_cast<int32_t>(colorIndex) << ready;
+    SendToAll(p);
+}
+
+void GameServer::BroadcastLobbyStartGame()
+{
+    sf::Packet p;
+    p << static_cast<uint8_t>(Server::PacketType::kLobbyStartGame);
+    SendToAll(p);
+}
+
+bool GameServer::PollClientLobbyBindingState(int& colorIndex, bool& ready)
+{
+    std::scoped_lock lock(m_lobby_mutex);
+    if (!m_has_client_lobby_state) return false;
+    colorIndex = m_client_lobby_color;
+    ready = m_client_lobby_ready;
+    m_has_client_lobby_state = false;
+    return true;
+}
+
+bool GameServer::PollClientStartRequest()
+{
+    std::scoped_lock lock(m_lobby_mutex);
+    bool v = m_client_start_requested;
+    m_client_start_requested = false;
+    return v;
 }

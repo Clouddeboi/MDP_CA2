@@ -12,6 +12,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <mutex>
 
 class GameServer
 {
@@ -22,6 +23,12 @@ public:
 	void NotifyPlayerRealtimeChange(uint8_t aircraft_identifier, uint8_t action, bool action_enabled);
 	void NotifyPlayerEvent(uint8_t aircraft_identifier, uint8_t action);
 	std::size_t GetConnectedPlayerCount() const;
+
+	void BroadcastLobbyBindingState(uint8_t playerIndex, int colorIndex, bool ready);
+	void BroadcastLobbyStartGame();
+
+	bool PollClientLobbyBindingState(int& colorIndex, bool& ready);
+	bool PollClientStartRequest();
 
 private:
 	struct RemotePeer
@@ -84,4 +91,10 @@ private:
 
 	sf::Time m_last_spawn_time;
 	sf::Time m_time_for_next_spawn;
+
+	std::mutex m_lobby_mutex;
+	bool m_has_client_lobby_state = false;
+	int m_client_lobby_color = -1;
+	bool m_client_lobby_ready = false;
+	bool m_client_start_requested = false;
 };

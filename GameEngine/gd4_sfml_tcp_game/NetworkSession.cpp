@@ -182,3 +182,91 @@ void NetworkSession::SetError(const std::string& message)
 {
     m_last_error = message;
 }
+
+void NetworkSession::SendLobbyBindingState(int colorIndex, bool ready)
+{
+    if (m_mode == NetworkMode::kHost && m_server)
+    {
+        m_server->BroadcastLobbyBindingState(0, colorIndex, ready);//Host is player 0
+        return;
+    }
+
+    if (m_mode == NetworkMode::kClient && m_client_socket && m_client_connected)
+    {
+        sf::Packet p;
+        p << static_cast<uint8_t>(Client::PacketType::kLobbyBindingState);
+        p << static_cast<int32_t>(colorIndex) << ready;
+        (void)m_client_socket->send(p);
+    }
+}
+
+void NetworkSession::SendLobbyStartRequest()
+{
+    if (m_mode == NetworkMode::kClient && m_client_socket && m_client_connected)
+    {
+        sf::Packet p;
+        p << static_cast<uint8_t>(Client::PacketType::kLobbyStartGameRequest);
+        (void)m_client_socket->send(p);
+    }
+}
+
+void NetworkSession::SendLobbyStartGame()
+{
+    if (m_mode == NetworkMode::kHost && m_server)
+    {
+        m_server->BroadcastLobbyStartGame();
+    }
+}
+
+void NetworkSession::PollLobbyPackets()
+{
+    if (m_mode == NetworkMode::kHost && m_server)
+    {
+        int color = -1; bool ready = false;
+        if (m_server->PollClientLobbyBindingState(color, ready))
+            m_pending_remote_binding = std::make_tuple(1, color, ready);//Client is player 1
+
+        if (m_server->PollClientStartRequest())
+            m_pending_start_game = true;
+        return;
+    }
+
+    if (m_mode == NetworkMode::kClient && m_client_socket && m_client_connected)
+    {
+        m_client_socket->setBlocking(false);
+        sf::Packet p;
+        while (m_client_socket->receive(p) == sf::Socket::Status::Done)
+        {
+            uint8_t type = 0;
+            p >> type;
+
+            if (static_cast<Server::PacketType>(type) == Server::PacketType::kLobbyBindingState)
+            {
+                uint8_t playerIdx = 0; int32_t color = -1; bool ready = false;
+                p >> playerIdx >> color >> ready;
+                m_pending_remote_binding = std::make_tuple(static_cast<int>(playerIdx), static_cast<int>(color), ready);
+            }
+            else if (static_cast<Server::PacketType>(type) == Server::PacketType::kLobbyStartGame)
+            {
+                m_pending_start_game = true;
+            }
+
+            p.clear();
+        }
+    }
+}
+
+bool NetworkSession::ConsumeRemoteBindingState(int& playerIndex, int& colorIndex, bool& ready)
+{
+    if (!m_pending_remote_binding.has_value()) return false;
+    std::tie(playerIndex, colorIndex, ready) = *m_pending_remote_binding;
+    m_pending_remote_binding.reset();
+    return true;
+}
+
+bool NetworkSession::ConsumeStartGameSignal()
+{
+    const bool v = m_pending_start_game;
+    m_pending_start_game = false;
+    return v;
+}

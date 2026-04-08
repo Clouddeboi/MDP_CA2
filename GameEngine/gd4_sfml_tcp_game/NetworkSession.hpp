@@ -4,6 +4,8 @@
 #include <SFML/System/Time.hpp>
 #include <memory>
 #include <string>
+#include <optional>
+#include <tuple> 
 
 namespace sf
 {
@@ -46,6 +48,16 @@ public:
     bool IsClient() const;
     NetworkMode GetMode() const;
 
+    //Lobby sync
+    void SendLobbyBindingState(int colorIndex, bool ready);//host or client
+    void SendLobbyStartRequest();//client -> host
+    void SendLobbyStartGame();//host -> client(s)
+
+    void PollLobbyPackets();
+    bool ConsumeRemoteBindingState(int& playerIndex, int& colorIndex, bool& ready);
+    bool ConsumeStartGameSignal();
+
+
     const std::string& GetLastError() const;
 
     GameServer* GetServer();
@@ -61,4 +73,7 @@ private:
     std::unique_ptr<sf::TcpSocket> m_client_socket;
     bool m_client_connected;
     std::string m_last_error;
+
+    std::optional<std::tuple<int, int, bool>> m_pending_remote_binding;
+    bool m_pending_start_game = false;
 };
