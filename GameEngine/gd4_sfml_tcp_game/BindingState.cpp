@@ -137,75 +137,40 @@ void BindingState::Draw()
 		window.draw(m_player_slots[i]);
 	}
 
-	//Show ready text when we have players
+	if (!m_ready_text)
+		return;
+
 	if (GetJoinedPlayerCount() >= 2)
 	{
-		if (AreAllPlayersReady() && m_ready_text)
+		if (AreAllPlayersReady())
 		{
-			std::string hostDevice = "ENTER";
-			if (!m_joined_players.empty() && m_joined_players[0].device.type == InputDeviceType::kController)
-			{
-				hostDevice = "A";
-			}
-
-			m_ready_text->setString("ALL READY! Player 1 press " + hostDevice + " to START GAME");
+			m_ready_text->setString("ALL READY! Host press ENTER to START");
 			m_ready_text->setFillColor(sf::Color::Green);
 			m_ready_text->setCharacterSize(28);
-			Utility::CentreOrigin(*m_ready_text);
-			window.draw(*m_ready_text);
 		}
-		else if (m_ready_text)
+		else
 		{
-			m_ready_text->setString("Keyboard: SPACE to ready | ESC to leave\nController: A to ready | B to leave");
+			if (m_network_mode)
+			{
+				m_ready_text->setString("Choose color and ready up");
+			}
+			else
+			{
+				m_ready_text->setString("Keyboard: SPACE to ready | ESC to leave\nController: A to ready | B to leave");
+			}
 			m_ready_text->setFillColor(sf::Color::White);
 			m_ready_text->setCharacterSize(20);
-			Utility::CentreOrigin(*m_ready_text);
-			window.draw(*m_ready_text);
 		}
 	}
-	else if (GetJoinedPlayerCount() < 2 && m_ready_text)
+	else
 	{
 		m_ready_text->setString("Need at least 2 players to start");
 		m_ready_text->setFillColor(sf::Color::Yellow);
 		m_ready_text->setCharacterSize(24);
-		Utility::CentreOrigin(*m_ready_text);
-		window.draw(*m_ready_text);
 	}
 
-	// Show ready text based on state
-	if (GetJoinedPlayerCount() >= 2)
-	{
-		if (AreAllPlayersReady() && m_ready_text)
-		{
-			std::string hostDevice = "ENTER";
-			if (!m_joined_players.empty() && m_joined_players[0].device.type == InputDeviceType::kController)
-			{
-				hostDevice = "A";
-			}
-
-			m_ready_text->setString("ALL READY! Player 1 press " + hostDevice + " to START GAME");
-			m_ready_text->setFillColor(sf::Color::Green);
-			m_ready_text->setCharacterSize(28);
-			Utility::CentreOrigin(*m_ready_text);
-			window.draw(*m_ready_text);
-		}
-		else if (m_ready_text)
-		{
-			m_ready_text->setString("Keyboard: SPACE to ready | ESC to leave\nController: A to ready | B to leave");
-			m_ready_text->setFillColor(sf::Color::White);
-			m_ready_text->setCharacterSize(20);
-			Utility::CentreOrigin(*m_ready_text);
-			window.draw(*m_ready_text);
-		}
-	}
-	else if (GetJoinedPlayerCount() == 1 && m_ready_text)
-	{
-		m_ready_text->setString("Need at least 2 players to start");
-		m_ready_text->setFillColor(sf::Color::Yellow);
-		m_ready_text->setCharacterSize(24);
-		Utility::CentreOrigin(*m_ready_text);
-		window.draw(*m_ready_text);
-	}
+	Utility::CentreOrigin(*m_ready_text);
+	window.draw(*m_ready_text);
 }
 
 bool BindingState::Update(sf::Time dt)
@@ -240,19 +205,38 @@ bool BindingState::Update(sf::Time dt)
 		Utility::CentreOrigin(*m_instructions_text);
 	}
 	
-	// Network communication for lobby binding state
+	//Network communication for lobby binding state
 	if (m_network_mode && GetContext().network)
 	{
 		GetContext().network->PollLobbyPackets();
 
-		int player = -1, color = -1; bool ready = false;
+		int player = -1;
+		int color = -1;
+		bool ready = false;
+
 		if (GetContext().network->ConsumeRemoteBindingState(player, color, ready))
 		{
 			if (player >= 0 && player < static_cast<int>(m_player_slots.size()))
 			{
-				if (color >= 0) m_player_slots[player].SelectColorAtIndex(color);
+				if (color >= 0)
+					m_player_slots[player].SelectColorAtIndex(color);
+
 				m_player_slots[player].SetReady(ready);
+
+				//Keep picker disabled for remote slot
+				if (player != m_local_player_index)
+					m_player_slots[player].ShowColorPicker(false);
 			}
+		}
+
+		int leftIndex = -1;
+		if (GetContext().network->ConsumeRemotePlayerLeft(leftIndex))
+		{
+			//Remote left -> go back to menu cleanly
+			GetContext().network->Reset();
+			RequestStackClear();
+			RequestStackPush(StateID::kMenu);
+			return false;
 		}
 
 		if (GetContext().network->ConsumeStartGameSignal())
@@ -264,6 +248,7 @@ bool BindingState::Update(sf::Time dt)
 
 		const int localColor = m_player_slots[m_local_player_index].GetSelectedColorIndex();
 		const bool localReady = m_player_slots[m_local_player_index].IsReady();
+
 		if (localColor != m_last_sent_color || localReady != m_last_sent_ready)
 		{
 			GetContext().network->SendLobbyBindingState(localColor, localReady);
@@ -277,7 +262,7 @@ bool BindingState::Update(sf::Time dt)
 
 bool BindingState::HandleEvent(const sf::Event& event)
 {
-	// Only Player 1 (host) can start the game with ENTER when all are ready
+	//Only Player 1 (host) can start the game with ENTER when all are ready
 	if (GetJoinedPlayerCount() >= 2 && AreAllPlayersReady())
 	{
 		if (!m_joined_players.empty())
@@ -312,7 +297,6 @@ bool BindingState::HandleEvent(const sf::Event& event)
 					{
 						if (!AreAllPlayersReady()) return false;
 						GetContext().network->SendLobbyStartGame();
-						// start local game
 					}
 					else
 					{
@@ -320,7 +304,6 @@ bool BindingState::HandleEvent(const sf::Event& event)
 						return false;
 					}
 				}
-				// existing local start logic...
 			}
 		}
 	}
@@ -350,7 +333,7 @@ bool BindingState::HandleEvent(const sf::Event& event)
 			{
 				GetContext().sounds->Play(SoundEffect::kButtonClick);
 				RequestStackPop();
-				RequestStackPush(StateID::kMenu);
+			 RequestStackPush(StateID::kMenu);
 			}
 			return false;
 		}
@@ -620,6 +603,94 @@ bool BindingState::HandleEvent(const sf::Event& event)
 		}
 	}
 
+	//Network handling for binding state (host/client)
+	if (m_network_mode && GetContext().network)
+	{
+		const int i = m_local_player_index;
+
+		if (const auto* keyPressed = event.getIf<sf::Event::KeyPressed>())
+		{
+			//Leave lobby
+			if (keyPressed->code == sf::Keyboard::Key::Escape ||
+				keyPressed->code == sf::Keyboard::Key::Backspace)
+			{
+				GetContext().network->SendLobbyLeave();
+				GetContext().network->Reset();
+				RequestStackClear();
+				RequestStackPush(StateID::kMenu);
+				return false;
+			}
+
+			//Navigate color picker
+			if (m_player_slots[i].IsShowingColorPicker() &&
+				(keyPressed->code == sf::Keyboard::Key::W ||
+				 keyPressed->code == sf::Keyboard::Key::A ||
+				 keyPressed->code == sf::Keyboard::Key::S ||
+				 keyPressed->code == sf::Keyboard::Key::D ||
+				 keyPressed->code == sf::Keyboard::Key::Up ||
+				 keyPressed->code == sf::Keyboard::Key::Down ||
+				 keyPressed->code == sf::Keyboard::Key::Left ||
+				 keyPressed->code == sf::Keyboard::Key::Right))
+			{
+				int deltaX = 0, deltaY = 0;
+				if (keyPressed->code == sf::Keyboard::Key::W || keyPressed->code == sf::Keyboard::Key::Up) deltaY = -1;
+				if (keyPressed->code == sf::Keyboard::Key::S || keyPressed->code == sf::Keyboard::Key::Down) deltaY = 1;
+				if (keyPressed->code == sf::Keyboard::Key::A || keyPressed->code == sf::Keyboard::Key::Left) deltaX = -1;
+				if (keyPressed->code == sf::Keyboard::Key::D || keyPressed->code == sf::Keyboard::Key::Right) deltaX = 1;
+
+				m_player_slots[i].NavigateColorGrid(deltaX, deltaY);
+				GetContext().sounds->Play(SoundEffect::kButtonClick);
+				return false;
+			}
+
+			//Confirm/ready/start
+			if (keyPressed->code == sf::Keyboard::Key::Enter || keyPressed->code == sf::Keyboard::Key::Space)
+			{
+				//First confirm color if picker open
+				if (m_player_slots[i].IsShowingColorPicker())
+				{
+					m_player_slots[i].ConfirmColorSelection();
+					m_player_slots[i].SetReady(true);
+					GetContext().sounds->Play(SoundEffect::kPairedPlayer);
+					return false;
+				}
+
+				//If all ready, host starts, client requests start
+				if (AreAllPlayersReady())
+				{
+					if (GetContext().network->IsHosting())
+					{
+						GetContext().network->SendLobbyStartGame();
+						GetContext().sounds->Play(SoundEffect::kStartGame);
+
+						RequestStackPop();
+						RequestStackPush(StateID::kGame);
+					}
+					else
+					{
+						GetContext().network->SendLobbyStartRequest();
+						GetContext().sounds->Play(SoundEffect::kButtonClick);
+					}
+					return false;
+				}
+
+				//Otherwise toggle local ready
+				const bool currentReady = m_player_slots[i].IsReady();
+				m_player_slots[i].SetReady(!currentReady);
+
+				if (currentReady)
+				{
+					m_player_slots[i].ShowColorPicker(true);
+				}
+
+				GetContext().sounds->Play(SoundEffect::kButtonClick);
+				return false;
+			}
+		}
+
+		return true;
+	}
+
 	return false;
 }
 
@@ -733,6 +804,8 @@ void BindingState::UpdateColorAvailability()
 
 bool BindingState::IsLocalControllableSlot(int index) const
 {
-	if (!m_network_mode) return true;
+	if (!m_network_mode)
+		return true;
+
 	return index == m_local_player_index;
 }
