@@ -16,4 +16,5 @@ private:
     sf::Sprite m_background_sprite;
     std::optional<sf::Text> m_title_text;
     std::optional<sf::Text> m_info_text;
+    bool m_transitioned;
 };

@@ -2,11 +2,13 @@
 #include "ResourceHolder.hpp"
 #include "Utility.hpp"
 #include "NetworkSession.hpp"
+#include "SoundEffect.hpp"
 #include <SFML/Graphics/RenderWindow.hpp>
 
 HostLobbyState::HostLobbyState(StateStack& stack, Context context)
     : State(stack, context)
     , m_background_sprite(context.textures->Get(TextureID::kTitleScreen))
+    , m_transitioned(false)
 {
     sf::Vector2f windowSize(context.window->getSize());
 
@@ -18,7 +20,7 @@ HostLobbyState::HostLobbyState(StateStack& stack, Context context)
     m_title_text->setPosition({ windowSize.x * 0.5f, 120.f });
 
     m_info_text.emplace(context.fonts->Get(Font::kMain),
-        "Server is running.\nWaiting for client handshake in next commit.\n\nPress ESC to cancel.",
+        "Server is running.\nWaiting for a client to connect...\n\nPress ESC to cancel.",
         26);
     m_info_text->setFillColor(sf::Color::Cyan);
     m_info_text->setOutlineColor(sf::Color::Black);
@@ -39,6 +41,18 @@ void HostLobbyState::Draw()
 
 bool HostLobbyState::Update(sf::Time)
 {
+    if (!m_transitioned && GetContext().network && GetContext().network->HasHostClientConnected())
+    {
+        m_transitioned = true;
+        GetContext().sounds->Play(SoundEffect::kPairedPlayer);
+
+        //Pop HostLobby + Menu, then enter Binding
+        RequestStackPop();
+        RequestStackPop();
+        RequestStackPush(StateID::kBinding);
+        return false;
+    }
+
     return true;
 }
 

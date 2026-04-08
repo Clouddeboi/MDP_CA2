@@ -206,6 +206,11 @@ sf::Time GameServer::Now() const
     return m_clock.getElapsedTime();
 }
 
+std::size_t GameServer::GetConnectedPlayerCount() const
+{
+    return m_connected_players;
+}
+
 void GameServer::HandleIncomingPackets()
 {
     bool detected_timeout = false;
