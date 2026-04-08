@@ -8,6 +8,8 @@
 #include "BindingState.hpp"
 #include "TileRegistry.hpp"
 #include "EditorState.hpp"
+#include "HostLobbyState.hpp"
+#include "JoinByIpState.hpp"
 
 const sf::Time Application::kTimePerFrame = sf::seconds(1.f/60.f);
 
@@ -91,4 +93,6 @@ void Application::RegisterStates()
 	m_stack.RegisterState<SettingsState>(StateID::kSettings);
 	m_stack.RegisterState<GameOverState>(StateID::kGameOver);
 	m_stack.RegisterState<EditorState>(StateID::kEditor);
+	m_stack.RegisterState<HostLobbyState>(StateID::kHostLobby);
+	m_stack.RegisterState<JoinByIpState>(StateID::kJoinByIp);
 }

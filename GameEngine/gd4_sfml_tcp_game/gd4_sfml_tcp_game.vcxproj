@@ -158,7 +158,9 @@
     <ClCompile Include="GameOverState.cpp" />
     <ClCompile Include="GameServer.cpp" />
     <ClCompile Include="GameState.cpp" />
+    <ClCompile Include="HostLobbyState.cpp" />
     <ClCompile Include="InputDevice.cpp" />
+    <ClCompile Include="JoinByIpState.cpp" />
     <ClCompile Include="Label.cpp" />
     <ClCompile Include="LevelManager.cpp" />
     <ClCompile Include="LevelSerializer.cpp" />
@@ -217,7 +219,9 @@
     <ClInclude Include="GameOverState.hpp" />
     <ClInclude Include="GameServer.hpp" />
     <ClInclude Include="GameState.hpp" />
+    <ClInclude Include="HostLobbyState.hpp" />
     <ClInclude Include="InputDevice.hpp" />
+    <ClInclude Include="JoinByIpState.hpp" />
     <ClInclude Include="Label.hpp" />
     <ClInclude Include="LevelData.hpp" />
     <ClInclude Include="LevelManager.hpp" />

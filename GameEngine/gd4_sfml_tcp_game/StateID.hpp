@@ -9,5 +9,7 @@ enum class StateID
 	kSettings,
 	kGameOver,
 	kBinding,
-	kEditor
+	kEditor,
+	kHostLobby,
+	kJoinByIp
 };
