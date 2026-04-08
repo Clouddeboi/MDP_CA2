@@ -186,7 +186,12 @@ bool BindingState::Update(sf::Time dt)
 	//Update instructions text based on player count
 	if (m_instructions_text)
 	{
-		if (GetJoinedPlayerCount() >= kMaxPlayers)
+		if (m_network_mode)
+		{
+			m_instructions_text->setString("Network lobby: choose color and ready up");
+			m_instructions_text->setFillColor(sf::Color::Cyan);
+		}
+		else if (GetJoinedPlayerCount() >= kMaxPlayers)
 		{
 			m_instructions_text->setString("Maximum players reached!");
 			m_instructions_text->setFillColor(sf::Color::Red);
@@ -262,52 +267,84 @@ bool BindingState::Update(sf::Time dt)
 
 bool BindingState::HandleEvent(const sf::Event& event)
 {
-	//Only Player 1 (host) can start the game with ENTER when all are ready
-	if (GetJoinedPlayerCount() >= 2 && AreAllPlayersReady())
+	//NETWORK MODE: handle and return immediately
+	if (m_network_mode && GetContext().network)
 	{
-		if (!m_joined_players.empty())
+		const int i = m_local_player_index;
+
+		if (const auto* keyPressed = event.getIf<sf::Event::KeyPressed>())
 		{
-			const auto& player1Device = m_joined_players[0].device;
-			bool isPlayer1Start = false;
-
-			if (const auto* keyPressed = event.getIf<sf::Event::KeyPressed>())
+			if (keyPressed->code == sf::Keyboard::Key::Escape ||
+				keyPressed->code == sf::Keyboard::Key::Backspace)
 			{
-				if (player1Device.type == InputDeviceType::kKeyboardMouse &&
-					keyPressed->code == sf::Keyboard::Key::Enter)
-				{
-					isPlayer1Start = true;
-				}
+				GetContext().network->SendLobbyLeave();
+				GetContext().network->Reset();
+				RequestStackClear();
+				RequestStackPush(StateID::kMenu);
+				return false;
 			}
 
-			if (const auto* joyButtonPressed = event.getIf<sf::Event::JoystickButtonPressed>())
+			if (m_player_slots[i].IsShowingColorPicker() &&
+				(keyPressed->code == sf::Keyboard::Key::W ||
+				 keyPressed->code == sf::Keyboard::Key::A ||
+				 keyPressed->code == sf::Keyboard::Key::S ||
+				 keyPressed->code == sf::Keyboard::Key::D ||
+				 keyPressed->code == sf::Keyboard::Key::Up ||
+				 keyPressed->code == sf::Keyboard::Key::Down ||
+				 keyPressed->code == sf::Keyboard::Key::Left ||
+				 keyPressed->code == sf::Keyboard::Key::Right))
 			{
-				if (player1Device.type == InputDeviceType::kController &&
-					player1Device.deviceIndex == static_cast<int>(joyButtonPressed->joystickId) &&
-					joyButtonPressed->button == 0)
-				{
-					isPlayer1Start = true;
-				}
+				int dx = 0, dy = 0;
+				if (keyPressed->code == sf::Keyboard::Key::W || keyPressed->code == sf::Keyboard::Key::Up) dy = -1;
+				if (keyPressed->code == sf::Keyboard::Key::S || keyPressed->code == sf::Keyboard::Key::Down) dy = 1;
+				if (keyPressed->code == sf::Keyboard::Key::A || keyPressed->code == sf::Keyboard::Key::Left) dx = -1;
+				if (keyPressed->code == sf::Keyboard::Key::D || keyPressed->code == sf::Keyboard::Key::Right) dx = 1;
+
+				m_player_slots[i].NavigateColorGrid(dx, dy);
+				GetContext().sounds->Play(SoundEffect::kButtonClick);
+				return false;
 			}
 
-			if (isPlayer1Start)
+			if (keyPressed->code == sf::Keyboard::Key::Enter || keyPressed->code == sf::Keyboard::Key::Space)
 			{
-				if (m_network_mode && GetContext().network)
+				if (m_player_slots[i].IsShowingColorPicker())
+				{
+					m_player_slots[i].ConfirmColorSelection();
+					m_player_slots[i].SetReady(true);
+					GetContext().sounds->Play(SoundEffect::kPairedPlayer);
+					return false;
+				}
+
+				if (AreAllPlayersReady())
 				{
 					if (GetContext().network->IsHosting())
 					{
-						if (!AreAllPlayersReady()) return false;
 						GetContext().network->SendLobbyStartGame();
+						GetContext().sounds->Play(SoundEffect::kStartGame);
+						RequestStackPop();
+						RequestStackPush(StateID::kGame);
 					}
 					else
 					{
 						GetContext().network->SendLobbyStartRequest();
-						return false;
+						GetContext().sounds->Play(SoundEffect::kButtonClick);
 					}
+					return false;
 				}
+
+				const bool currentReady = m_player_slots[i].IsReady();
+				m_player_slots[i].SetReady(!currentReady);
+				if (currentReady) m_player_slots[i].ShowColorPicker(true);
+
+				GetContext().sounds->Play(SoundEffect::kButtonClick);
+				return false;
 			}
 		}
+
+		return true;
 	}
 
+	// LOCAL MODE: keep your existing old logic here
 	if (const auto* keyPressed = event.getIf<sf::Event::KeyPressed>())
 	{
 		if (keyPressed->code == sf::Keyboard::Key::Escape ||
@@ -405,13 +442,13 @@ bool BindingState::HandleEvent(const sf::Event& event)
 
 						if (currentReady)
 						{
-							int currentColor = m_player_slots[i].GetSelectedColorIndex();
-							if (currentColor >= 0 && currentColor < static_cast<int>(m_color_taken.size()))
-							{
-								m_color_taken[currentColor] = false;
-								UpdateColorAvailability();
-							}
-							m_player_slots[i].ShowColorPicker(true);
+						 int currentColor = m_player_slots[i].GetSelectedColorIndex();
+						 if (currentColor >= 0 && currentColor < static_cast<int>(m_color_taken.size()))
+						 {
+							 m_color_taken[currentColor] = false;
+							 UpdateColorAvailability();
+						 }
+						 m_player_slots[i].ShowColorPicker(true);
 						}
 
 						GetContext().sounds->Play(SoundEffect::kButtonClick);
@@ -720,7 +757,8 @@ void BindingState::AddPlayer(const InputDeviceInfo& device)
 		m_player_slots[playerIndex].MarkColorAsUnavailable(i, m_color_taken[i]);
 	}
 
-	m_player_slots[playerIndex].ShowColorPicker(true);
+	const bool canControlThisSlot = (!m_network_mode) || (playerIndex == m_local_player_index);
+	m_player_slots[playerIndex].ShowColorPicker(canControlThisSlot);
 
 	//Auto-select first available color, but DON'T mark as taken yet
 	for (size_t i = 0; i < m_all_colors.size(); ++i)
