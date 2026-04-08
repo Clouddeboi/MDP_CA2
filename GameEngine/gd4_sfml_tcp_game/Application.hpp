@@ -6,6 +6,7 @@
 #include "StateStack.hpp"
 #include "MusicPlayer.hpp"
 #include "SoundPlayer.hpp"
+#include "NetworkSession.hpp"
 
 class Application
 {
@@ -31,5 +32,7 @@ private:
 
 	MusicPlayer m_music;
 	SoundPlayer m_sound;
+
+	NetworkSession m_network;
 };
 

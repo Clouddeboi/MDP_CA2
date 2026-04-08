@@ -14,6 +14,7 @@ namespace sf
 
 class Player;
 class StateStack;
+class NetworkSession;
 
 class State
 {
@@ -22,13 +23,14 @@ public:
 
 	struct Context
 	{
-		Context(sf::RenderWindow& window, TextureHolder& textures, FontHolder& fonts, Player& player, MusicPlayer& music, SoundPlayer& sounds);
+		Context(sf::RenderWindow& window, TextureHolder& textures, FontHolder& fonts, Player& player, MusicPlayer& music, SoundPlayer& sounds, NetworkSession& network);
 		sf::RenderWindow* window;
 		TextureHolder* textures;
 		FontHolder* fonts;
 		Player* player;
 		MusicPlayer* music;
 		SoundPlayer* sounds;
+		NetworkSession* network;
 	};
 
 public:

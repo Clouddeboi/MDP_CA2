@@ -165,6 +165,7 @@
     <ClCompile Include="Main.cpp" />
     <ClCompile Include="MenuState.cpp" />
     <ClCompile Include="MusicPlayer.cpp" />
+    <ClCompile Include="NetworkSession.cpp" />
     <ClCompile Include="ParticleNode.cpp" />
     <ClCompile Include="PauseState.cpp" />
     <ClCompile Include="Pickup.cpp" />
@@ -227,6 +228,7 @@
     <ClInclude Include="MusicPlayer.hpp" />
     <ClInclude Include="MusicThemes.hpp" />
     <ClInclude Include="NetworkProtocol.hpp" />
+    <ClInclude Include="NetworkSession.hpp" />
     <ClInclude Include="Particle.hpp" />
     <ClInclude Include="ParticleNode.hpp" />
     <ClInclude Include="ParticleType.hpp" />
