@@ -373,6 +373,18 @@ void GameServer::HandleIncomingPackets(sf::Packet& packet, RemotePeer& receiving
             SendToAll(packet);
         }
     }
+    break;
+    case Client::PacketType::kLobbyLeave:
+    {
+        {
+            std::scoped_lock lock(m_lobby_mutex);
+            m_client_left_requested = true;
+        }
+
+        // Client is player index 1 in your current host/client binding model
+        BroadcastLobbyPlayerLeft(1);
+    }
+    break;
     }
 }
 
@@ -556,4 +568,20 @@ bool GameServer::PollClientStartRequest()
     bool v = m_client_start_requested;
     m_client_start_requested = false;
     return v;
+}
+
+void GameServer::BroadcastLobbyPlayerLeft(std::uint8_t playerIndex)
+{
+    sf::Packet p;
+    p << static_cast<std::uint8_t>(Server::PacketType::kLobbyPlayerLeft);
+    p << playerIndex;
+    SendToAll(p);
+}
+
+bool GameServer::PollClientLeave()
+{
+    std::scoped_lock lock(m_lobby_mutex);
+    const bool left = m_client_left_requested;
+    m_client_left_requested = false;
+    return left;
 }

@@ -17,6 +17,7 @@ public:
 	virtual void Draw() override;
 	virtual bool Update(sf::Time dt) override;
 	virtual bool HandleEvent(const sf::Event& event) override;
+	bool IsLocalControllableSlot(int index) const;
 
 private:
 	void AddPlayer(const InputDeviceInfo& device);

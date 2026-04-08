@@ -20,7 +20,8 @@ namespace Server
 		kUpdateClientState, //This takes one float with the current scrolling of the world in the server, and then a sf::Int32 for the number of aircraft. For each aircraft, it packs one sf::Int32 value with the identifier, two floats for position, health, and ammo. Think about enemies. If we don't send anything they will be locally tracked
 		kMissionSuccess, // This has no arguments. It just informs the client that the game is over and the client can show the appropriate state
 		kLobbyBindingState,   //uint8 playerIndex, int32 colorIndex, bool ready
-		kLobbyStartGame       //no payload
+		kLobbyStartGame, //no payload
+		kLobbyPlayerLeft
 	};
 }
 
@@ -35,7 +36,8 @@ namespace Client
 		kGameEvent, //This is for explosions
 		kQuit,
 		kLobbyBindingState,//int32 colorIndex, bool ready
-		kLobbyStartGameRequest//no payload (client asks host)
+		kLobbyStartGameRequest,//no payload (client asks host)
+		kLobbyLeave
 	};
 }
 

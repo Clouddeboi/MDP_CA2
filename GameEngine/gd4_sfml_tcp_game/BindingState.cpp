@@ -306,29 +306,21 @@ bool BindingState::HandleEvent(const sf::Event& event)
 
 			if (isPlayer1Start)
 			{
-				std::cout << "[BindingState] Host starting game with " << GetJoinedPlayerCount() << " players:\n";
-				GetContext().sounds->Play(SoundEffect::kStartGame);
-
-				auto& config = PlayerBindingConfig::GetInstance();
-				config.SetPlayerCount(GetJoinedPlayerCount());
-
-				for (size_t i = 0; i < m_joined_players.size(); ++i)
+				if (m_network_mode && GetContext().network)
 				{
-					config.SetPlayerDevice(static_cast<int>(i), m_joined_players[i].device);
-
-					int colorIndex = m_player_slots[i].GetSelectedColorIndex();
-					if (colorIndex >= 0 && colorIndex < static_cast<int>(m_all_colors.size()))
+					if (GetContext().network->IsHosting())
 					{
-						config.SetPlayerColor(static_cast<int>(i), m_all_colors[colorIndex]);
+						if (!AreAllPlayersReady()) return false;
+						GetContext().network->SendLobbyStartGame();
+						// start local game
 					}
-
-					std::cout << "  Player " << (i + 1) << " -> "
-						<< InputDeviceDetector::GetDeviceDescription(m_joined_players[i].device) << "\n";
+					else
+					{
+						GetContext().network->SendLobbyStartRequest();
+						return false;
+					}
 				}
-
-				RequestStackPop();
-				RequestStackPush(StateID::kGame);
-				return false;
+				// existing local start logic...
 			}
 		}
 	}
@@ -460,13 +452,13 @@ bool BindingState::HandleEvent(const sf::Event& event)
 
 						if (currentReady)
 						{
-							int currentColor = m_player_slots[i].GetSelectedColorIndex();
-							if (currentColor >= 0 && currentColor < static_cast<int>(m_color_taken.size()))
-							{
-								m_color_taken[currentColor] = false;
-								UpdateColorAvailability();
-							}
-							m_player_slots[i].ShowColorPicker(true);
+						 int currentColor = m_player_slots[i].GetSelectedColorIndex();
+						 if (currentColor >= 0 && currentColor < static_cast<int>(m_color_taken.size()))
+						 {
+							 m_color_taken[currentColor] = false;
+							 UpdateColorAvailability();
+						 }
+						 m_player_slots[i].ShowColorPicker(true);
 						}
 
 						GetContext().sounds->Play(SoundEffect::kButtonClick);
@@ -566,36 +558,36 @@ bool BindingState::HandleEvent(const sf::Event& event)
 					{
 						m_player_slots[i].ConfirmColorSelection();
 
-						int selectedColor = m_player_slots[i].GetSelectedColorIndex();
-						if (selectedColor >= 0 && selectedColor < static_cast<int>(m_color_taken.size()))
-						{
-							m_color_taken[selectedColor] = true;
-							UpdateColorAvailability();
-						}
+					 int selectedColor = m_player_slots[i].GetSelectedColorIndex();
+					 if (selectedColor >= 0 && selectedColor < static_cast<int>(m_color_taken.size()))
+					 {
+						 m_color_taken[selectedColor] = true;
+						 UpdateColorAvailability();
+					 }
 
-						m_player_slots[i].SetReady(true);
-						GetContext().sounds->Play(SoundEffect::kPairedPlayer);
-						std::cout << "[BindingState] Player " << (i + 1) << " confirmed color and readied up\n";
+					 m_player_slots[i].SetReady(true);
+					 GetContext().sounds->Play(SoundEffect::kPairedPlayer);
+					 std::cout << "[BindingState] Player " << (i + 1) << " confirmed color and readied up\n";
 					}
 					else
 					{
 						//Toggle ready state if already has color
-						bool currentReady = m_player_slots[i].IsReady();
-						m_player_slots[i].SetReady(!currentReady);
+					 bool currentReady = m_player_slots[i].IsReady();
+					 m_player_slots[i].SetReady(!currentReady);
 
-						if (currentReady)
-						{
-							int currentColor = m_player_slots[i].GetSelectedColorIndex();
-							if (currentColor >= 0 && currentColor < static_cast<int>(m_color_taken.size()))
-							{
-								m_color_taken[currentColor] = false;
-								UpdateColorAvailability();
-							}
-							m_player_slots[i].ShowColorPicker(true);
-						}
+					 if (currentReady)
+					 {
+						 int currentColor = m_player_slots[i].GetSelectedColorIndex();
+						 if (currentColor >= 0 && currentColor < static_cast<int>(m_color_taken.size()))
+						 {
+							 m_color_taken[currentColor] = false;
+							 UpdateColorAvailability();
+						 }
+						 m_player_slots[i].ShowColorPicker(true);
+					 }
 
-						GetContext().sounds->Play(SoundEffect::kButtonClick);
-						std::cout << "[BindingState] Player " << (i + 1) << (currentReady ? " unready" : " ready") << "\n";
+					 GetContext().sounds->Play(SoundEffect::kButtonClick);
+					 std::cout << "[BindingState] Player " << (i + 1) << (currentReady ? " unready" : " ready") << "\n";
 					}
 					return false;
 				}
@@ -603,8 +595,7 @@ bool BindingState::HandleEvent(const sf::Event& event)
 		}
 	}
 
-	//Detect input events for joining
-	if (m_device_detector.IsInputEvent(event) && CanAddMorePlayers())
+	if (!m_network_mode && m_device_detector.IsInputEvent(event) && CanAddMorePlayers())
 	{
 		auto device = m_device_detector.DetectDeviceFromEvent(event);
 		if (device.has_value())
@@ -738,4 +729,10 @@ void BindingState::UpdateColorAvailability()
 			m_player_slots[i].MarkColorAsUnavailable(colorIdx, m_color_taken[colorIdx] && !isMyColor);
 		}
 	}
+}
+
+bool BindingState::IsLocalControllableSlot(int index) const
+{
+	if (!m_network_mode) return true;
+	return index == m_local_player_index;
 }

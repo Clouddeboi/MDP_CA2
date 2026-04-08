@@ -52,11 +52,12 @@ public:
     void SendLobbyBindingState(int colorIndex, bool ready);//host or client
     void SendLobbyStartRequest();//client -> host
     void SendLobbyStartGame();//host -> client(s)
+    void SendLobbyLeave();
+    bool ConsumeRemotePlayerLeft(int& playerIndex);
 
     void PollLobbyPackets();
     bool ConsumeRemoteBindingState(int& playerIndex, int& colorIndex, bool& ready);
     bool ConsumeStartGameSignal();
-
 
     const std::string& GetLastError() const;
 
@@ -76,4 +77,5 @@ private:
 
     std::optional<std::tuple<int, int, bool>> m_pending_remote_binding;
     bool m_pending_start_game = false;
+    std::optional<int> m_pending_player_left;
 };

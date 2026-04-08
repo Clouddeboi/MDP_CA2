@@ -30,6 +30,9 @@ public:
 	bool PollClientLobbyBindingState(int& colorIndex, bool& ready);
 	bool PollClientStartRequest();
 
+	void BroadcastLobbyPlayerLeft(std::uint8_t playerIndex);
+	bool PollClientLeave();
+
 private:
 	struct RemotePeer
 	{
@@ -97,4 +100,5 @@ private:
 	int m_client_lobby_color = -1;
 	bool m_client_lobby_ready = false;
 	bool m_client_start_requested = false;
+	bool m_client_left_requested = false;
 };

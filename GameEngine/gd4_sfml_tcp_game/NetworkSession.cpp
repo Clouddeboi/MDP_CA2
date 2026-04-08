@@ -141,6 +141,10 @@ void NetworkSession::Reset()
 
     m_mode = NetworkMode::kNone;
     m_last_error.clear();
+
+    m_pending_remote_binding.reset();
+    m_pending_start_game = false;
+    m_pending_player_left.reset();
 }
 
 bool NetworkSession::IsActive() const
@@ -222,33 +226,61 @@ void NetworkSession::PollLobbyPackets()
 {
     if (m_mode == NetworkMode::kHost && m_server)
     {
-        int color = -1; bool ready = false;
+        int color = -1;
+        bool ready = false;
+
         if (m_server->PollClientLobbyBindingState(color, ready))
-            m_pending_remote_binding = std::make_tuple(1, color, ready);//Client is player 1
+        {
+            m_pending_remote_binding = std::make_tuple(1, color, ready);//client is slot 1
+        }
 
         if (m_server->PollClientStartRequest())
+        {
             m_pending_start_game = true;
+        }
+
+        if (m_server->PollClientLeave())
+        {
+            m_pending_player_left = 1;
+        }
+
         return;
     }
 
     if (m_mode == NetworkMode::kClient && m_client_socket && m_client_connected)
     {
         m_client_socket->setBlocking(false);
+
         sf::Packet p;
         while (m_client_socket->receive(p) == sf::Socket::Status::Done)
         {
-            uint8_t type = 0;
+            std::uint8_t type = 0;
             p >> type;
 
-            if (static_cast<Server::PacketType>(type) == Server::PacketType::kLobbyBindingState)
+            const auto packetType = static_cast<Server::PacketType>(type);
+
+            if (packetType == Server::PacketType::kLobbyBindingState)
             {
-                uint8_t playerIdx = 0; int32_t color = -1; bool ready = false;
+                std::uint8_t playerIdx = 0;
+                std::int32_t color = -1;
+                bool ready = false;
                 p >> playerIdx >> color >> ready;
-                m_pending_remote_binding = std::make_tuple(static_cast<int>(playerIdx), static_cast<int>(color), ready);
+
+                m_pending_remote_binding = std::make_tuple(
+                    static_cast<int>(playerIdx),
+                    static_cast<int>(color),
+                    ready
+                );
             }
-            else if (static_cast<Server::PacketType>(type) == Server::PacketType::kLobbyStartGame)
+            else if (packetType == Server::PacketType::kLobbyStartGame)
             {
                 m_pending_start_game = true;
+            }
+            else if (packetType == Server::PacketType::kLobbyPlayerLeft)
+            {
+                std::uint8_t leftIdx = 0;
+                p >> leftIdx;
+                m_pending_player_left = static_cast<int>(leftIdx);
             }
 
             p.clear();
@@ -269,4 +301,32 @@ bool NetworkSession::ConsumeStartGameSignal()
     const bool v = m_pending_start_game;
     m_pending_start_game = false;
     return v;
+}
+
+void NetworkSession::SendLobbyLeave()
+{
+    //Client notifies host
+    if (m_mode == NetworkMode::kClient && m_client_socket && m_client_connected)
+    {
+        sf::Packet p;
+        p << static_cast<std::uint8_t>(Client::PacketType::kLobbyLeave);
+        (void)m_client_socket->send(p);
+        return;
+    }
+
+    //Host can also broadcast local leave if needed
+    if (m_mode == NetworkMode::kHost && m_server)
+    {
+        m_server->BroadcastLobbyPlayerLeft(0);
+    }
+}
+
+bool NetworkSession::ConsumeRemotePlayerLeft(int& playerIndex)
+{
+    if (!m_pending_player_left.has_value())
+        return false;
+
+    playerIndex = *m_pending_player_left;
+    m_pending_player_left.reset();
+    return true;
 }
