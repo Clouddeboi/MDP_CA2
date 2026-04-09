@@ -27,6 +27,10 @@ private:
 	bool AreAllPlayersReady() const;
 	void UpdateColorAvailability();
 
+	int FindFirstFreeColorIndex(int blockedIndex = -1) const;
+	void RebuildColorTakenFromSlots();
+	void ApplyRemoteSlotState(int slotIndex, int colorIndex, bool ready);
+
 private:
 	static constexpr int kMaxPlayers = 20;
 	TextureHolder m_textures;

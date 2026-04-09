@@ -221,23 +221,45 @@ bool BindingState::Update(sf::Time dt)
 
 		if (GetContext().network->ConsumeRemoteBindingState(player, color, ready))
 		{
-			if (player >= 0 && player < static_cast<int>(m_player_slots.size()))
+			ApplyRemoteSlotState(player, color, ready);
+			RebuildColorTakenFromSlots();
+
+			//Host authoritative color conflict resolution
+			if (GetContext().network->IsHosting() && player == 1)
 			{
-				if (color >= 0)
-					m_player_slots[player].SelectColorAtIndex(color);
+				const int hostColor = m_player_slots[0].GetSelectedColorIndex();
+				int clientColor = m_player_slots[1].GetSelectedColorIndex();
 
-				m_player_slots[player].SetReady(ready);
+				if (clientColor == hostColor && hostColor >= 0)
+				{
+					//Force a different client color and clear ready
+					const int replacement = FindFirstFreeColorIndex(hostColor);
+					if (replacement >= 0)
+					{
+						m_player_slots[1].SelectColorAtIndex(replacement);
+						m_player_slots[1].SetReady(false);
+						clientColor = replacement;
+					}
+					else
+					{
+						m_player_slots[1].SetReady(false);
+					}
+				}
 
-				//Keep picker disabled for remote slot
-				if (player != m_local_player_index)
-					m_player_slots[player].ShowColorPicker(false);
+				//Rebroadcast authoritative client state so both machines match
+				GetContext().network->HostBroadcastLobbyBindingState(
+					1,
+					clientColor,
+					m_player_slots[1].IsReady()
+				);
+
+				RebuildColorTakenFromSlots();
 			}
 		}
 
 		int leftIndex = -1;
 		if (GetContext().network->ConsumeRemotePlayerLeft(leftIndex))
 		{
-			//Remote left -> go back to menu cleanly
 			GetContext().network->Reset();
 			RequestStackClear();
 			RequestStackPush(StateID::kMenu);
@@ -334,7 +356,8 @@ bool BindingState::HandleEvent(const sf::Event& event)
 
 				const bool currentReady = m_player_slots[i].IsReady();
 				m_player_slots[i].SetReady(!currentReady);
-				if (currentReady) m_player_slots[i].ShowColorPicker(true);
+				if (currentReady)
+					m_player_slots[i].ShowColorPicker(true);
 
 				GetContext().sounds->Play(SoundEffect::kButtonClick);
 				return false;
@@ -344,7 +367,7 @@ bool BindingState::HandleEvent(const sf::Event& event)
 		return true;
 	}
 
-	// LOCAL MODE: keep your existing old logic here
+	//LOCAL MODE: existing old logic 
 	if (const auto* keyPressed = event.getIf<sf::Event::KeyPressed>())
 	{
 		if (keyPressed->code == sf::Keyboard::Key::Escape ||
@@ -829,7 +852,7 @@ bool BindingState::AreAllPlayersReady() const
 
 void BindingState::UpdateColorAvailability()
 {
-	// Update all players' color pickers with current availability
+	//Update all players' color pickers with current availability
 	for (int i = 0; i < GetJoinedPlayerCount(); ++i)
 	{
 		for (size_t colorIdx = 0; colorIdx < m_color_taken.size(); ++colorIdx)
@@ -846,4 +869,49 @@ bool BindingState::IsLocalControllableSlot(int index) const
 		return true;
 
 	return index == m_local_player_index;
+}
+
+int BindingState::FindFirstFreeColorIndex(int blockedIndex) const
+{
+	for (int i = 0; i < static_cast<int>(m_color_taken.size()); ++i)
+	{
+		if (i == blockedIndex)
+			continue;
+		if (!m_color_taken[i])
+			return i;
+	}
+	return -1;
+}
+
+void BindingState::RebuildColorTakenFromSlots()
+{
+	std::fill(m_color_taken.begin(), m_color_taken.end(), false);
+
+	for (int i = 0; i < GetJoinedPlayerCount(); ++i)
+	{
+		const int c = m_player_slots[i].GetSelectedColorIndex();
+		if (c >= 0 && c < static_cast<int>(m_color_taken.size()))
+		{
+			m_color_taken[c] = true;
+		}
+	}
+
+	UpdateColorAvailability();
+}
+
+void BindingState::ApplyRemoteSlotState(int slotIndex, int colorIndex, bool ready)
+{
+	if (slotIndex < 0 || slotIndex >= static_cast<int>(m_player_slots.size()))
+		return;
+
+	if (colorIndex >= 0)
+		m_player_slots[slotIndex].SelectColorAtIndex(colorIndex);
+
+	m_player_slots[slotIndex].SetReady(ready);
+
+	//remote slot should not open picker locally
+	if (slotIndex != m_local_player_index)
+	{
+		m_player_slots[slotIndex].ShowColorPicker(false);
+	}
 }

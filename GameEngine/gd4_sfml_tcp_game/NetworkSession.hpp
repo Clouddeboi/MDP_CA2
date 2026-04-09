@@ -59,6 +59,8 @@ public:
     bool ConsumeRemoteBindingState(int& playerIndex, int& colorIndex, bool& ready);
     bool ConsumeStartGameSignal();
 
+    void HostBroadcastLobbyBindingState(int playerIndex, int colorIndex, bool ready);
+
     const std::string& GetLastError() const;
 
     GameServer* GetServer();

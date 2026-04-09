@@ -330,3 +330,15 @@ bool NetworkSession::ConsumeRemotePlayerLeft(int& playerIndex)
     m_pending_player_left.reset();
     return true;
 }
+
+void NetworkSession::HostBroadcastLobbyBindingState(int playerIndex, int colorIndex, bool ready)
+{
+    if (m_mode == NetworkMode::kHost && m_server)
+    {
+        m_server->BroadcastLobbyBindingState(
+            static_cast<std::uint8_t>(playerIndex),
+            colorIndex,
+            ready
+        );
+    }
+}
