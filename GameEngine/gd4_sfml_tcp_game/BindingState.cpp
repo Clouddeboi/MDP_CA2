@@ -235,53 +235,40 @@ bool BindingState::Update(sf::Time dt)
 		//Consume all queued updates, not just one
 		while (GetContext().network->ConsumeRemoteBindingState(player, color, ready))
 		{
-			//If host receives client state after client rejoined, ensure slot 1 exists again
-			if (GetContext().network->IsHosting() && player == 1)
+			//Ensure remote slot exists (generalized, no hardcoded slot 1)
+			if (GetContext().network->IsHosting())
 			{
-				if (GetJoinedPlayerCount() < 2)
-				{
-					//Re-create remote player slot (client)
-					AddPlayer(InputDeviceInfo(InputDeviceType::kKeyboardMouse, -1));
-					m_player_slots[1].ShowColorPicker(false);//Host must not control client slot
-					m_player_slots[1].SetReady(false);
-
-					if (m_instructions_text)
-					{
-						m_instructions_text->setString("Client connected. Waiting for ready...");
-						m_instructions_text->setFillColor(sf::Color::Cyan);
-						Utility::CentreOrigin(*m_instructions_text);
-					}
-				}
+				EnsurePlayerSlotExists(player);
 			}
 
 			ApplyRemoteSlotState(player, color, ready);
 			RebuildColorTakenFromSlots();
 
-			//Host authoritative color conflict resolution
-			if (GetContext().network->IsHosting() && player == 1)
+			//Host authoritative color conflict resolution for remote players
+			if (GetContext().network->IsHosting() && player != m_local_player_index)
 			{
-				const int hostColor = m_player_slots[0].GetSelectedColorIndex();
-				int clientColor = m_player_slots[1].GetSelectedColorIndex();
+				const int hostColor = m_player_slots[m_local_player_index].GetSelectedColorIndex();
+				int remoteColor = m_player_slots[player].GetSelectedColorIndex();
 
-				if (clientColor == hostColor && hostColor >= 0)
+				if (remoteColor == hostColor && hostColor >= 0)
 				{
 					const int replacement = FindFirstFreeColorIndex(hostColor);
 					if (replacement >= 0)
 					{
-						m_player_slots[1].SelectColorAtIndex(replacement);
-						m_player_slots[1].SetReady(false);
-						clientColor = replacement;
+						m_player_slots[player].SelectColorAtIndex(replacement);
+						m_player_slots[player].SetReady(false);
+						remoteColor = replacement;
 					}
 					else
 					{
-						m_player_slots[1].SetReady(false);
+						m_player_slots[player].SetReady(false);
 					}
 				}
 
 				GetContext().network->HostBroadcastLobbyBindingState(
-					1,
-					clientColor,
-					m_player_slots[1].IsReady()
+					player,
+					remoteColor,
+					m_player_slots[player].IsReady()
 				);
 
 				RebuildColorTakenFromSlots();
@@ -289,27 +276,27 @@ bool BindingState::Update(sf::Time dt)
 		}
 
 		int leftIndex = -1;
-		bool anyLeaveProcessed = false;
 
 		while (GetContext().network->ConsumeRemotePlayerLeft(leftIndex))
 		{
-			anyLeaveProcessed = true;
-
-			//Host sees client leave -> remove client from lobby, keep lobby open
-			if (GetContext().network->IsHosting() && leftIndex == 1)
+			//Host sees client leave -> remove that slot from lobby, keep lobby open
+			if (GetContext().network->IsHosting() && leftIndex != m_local_player_index)
 			{
-				if (GetJoinedPlayerCount() > 1)
+				if (leftIndex >= 0 && leftIndex < GetJoinedPlayerCount())
 				{
-					RemovePlayer(1);
+					RemovePlayer(leftIndex);
 				}
 
 				//Keep host slot interactive
-				m_player_slots[0].ShowColorPicker(true);
 				m_local_player_index = 0;
+				if (GetJoinedPlayerCount() > 0)
+				{
+					m_player_slots[m_local_player_index].ShowColorPicker(true);
+				}
 
 				if (m_instructions_text)
 				{
-					m_instructions_text->setString("Client left. Waiting for player...");
+					m_instructions_text->setString("A player left. Waiting for player...");
 					m_instructions_text->setFillColor(sf::Color::Yellow);
 					Utility::CentreOrigin(*m_instructions_text);
 				}
@@ -322,15 +309,6 @@ bool BindingState::Update(sf::Time dt)
 				RequestStackPush(StateID::kMenu);
 				return false;
 			}
-		}
-
-		//Guard if queue had multiple events
-		if (anyLeaveProcessed && !GetContext().network->IsHosting())
-		{
-			GetContext().network->Reset();
-			RequestStackClear();
-			RequestStackPush(StateID::kMenu);
-			return false;
 		}
 
 		if (GetContext().network->ConsumeStartGameSignal())
@@ -942,5 +920,24 @@ void BindingState::ApplyRemoteSlotState(int slotIndex, int colorIndex, bool read
 	if (slotIndex != m_local_player_index)
 	{
 		m_player_slots[slotIndex].ShowColorPicker(false);
+	}
+}
+
+void BindingState::EnsurePlayerSlotExists(int playerIndex)
+{
+	while (GetJoinedPlayerCount() <= playerIndex && CanAddMorePlayers())
+	{
+		AddPlayer(InputDeviceInfo(InputDeviceType::kKeyboardMouse, -1));
+	}
+
+	if (m_network_mode)
+	{
+		for (int i = 0; i < GetJoinedPlayerCount(); ++i)
+		{
+			if (i != m_local_player_index)
+			{
+				m_player_slots[i].ShowColorPicker(false);
+			}
+		}
 	}
 }
