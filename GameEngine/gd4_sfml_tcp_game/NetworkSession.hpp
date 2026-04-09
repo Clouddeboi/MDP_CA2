@@ -6,6 +6,7 @@
 #include <string>
 #include <optional>
 #include <tuple> 
+#include <deque>
 
 namespace sf
 {
@@ -77,7 +78,7 @@ private:
     bool m_client_connected;
     std::string m_last_error;
 
-    std::optional<std::tuple<int, int, bool>> m_pending_remote_binding;
+    std::deque<std::tuple<int, int, bool>> m_pending_remote_binding_events;
     bool m_pending_start_game = false;
-    std::optional<int> m_pending_player_left;
+    std::deque<int> m_pending_player_left_events;
 };

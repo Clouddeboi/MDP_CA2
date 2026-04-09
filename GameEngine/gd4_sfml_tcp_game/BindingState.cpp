@@ -227,10 +227,11 @@ bool BindingState::Update(sf::Time dt)
 	{
 		GetContext().network->PollLobbyPackets();
 
-		// consume all pending remote binding updates
 		int player = -1;
 		int color = -1;
 		bool ready = false;
+
+		// IMPORTANT: consume all queued updates, not just one
 		while (GetContext().network->ConsumeRemoteBindingState(player, color, ready))
 		{
 			ApplyRemoteSlotState(player, color, ready);
@@ -244,7 +245,6 @@ bool BindingState::Update(sf::Time dt)
 
 				if (clientColor == hostColor && hostColor >= 0)
 				{
-					//Force a different client color and clear ready
 					const int replacement = FindFirstFreeColorIndex(hostColor);
 					if (replacement >= 0)
 					{
@@ -258,7 +258,6 @@ bool BindingState::Update(sf::Time dt)
 					}
 				}
 
-				//Rebroadcast authoritative client state so both machines match
 				GetContext().network->HostBroadcastLobbyBindingState(
 					1,
 					clientColor,
@@ -285,7 +284,6 @@ bool BindingState::Update(sf::Time dt)
 			return false;
 		}
 
-		//Periodic local sync
 		const int localColor = m_player_slots[m_local_player_index].GetSelectedColorIndex();
 		const bool localReady = m_player_slots[m_local_player_index].IsReady();
 

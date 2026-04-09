@@ -438,6 +438,13 @@ void GameServer::HandleDisconnections()
     {
         if ((*itr)->m_timed_out)
         {
+            //If a client timed out, mark leave for lobby logic
+            {
+                std::scoped_lock lock(m_lobby_mutex);
+                m_client_left_requested = true;
+            }
+            BroadcastLobbyPlayerLeft(1);
+
             //Inform everyone of a disconnection, erase
             for (uint8_t identifer : (*itr)->m_aircraft_identifiers)
             {
@@ -458,7 +465,6 @@ void GameServer::HandleDisconnections()
             }
 
             BroadcastMessage("A player has disconnected");
-
         }
         else
         {
