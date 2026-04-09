@@ -6,15 +6,23 @@
 #include "PlayerBindingConfig.hpp"
 #include "SoundPlayer.hpp"
 #include <iostream> 
+#include <algorithm>
 
-GameState::GameState(StateStack& stack, Context context) : State(stack, context), m_world(*context.window, *context.fonts, *context.sounds, 2), m_players(), m_sounds(*context.sounds) 
+GameState::GameState(StateStack& stack, Context context)
+	: State(stack, context)
+	, m_world(*context.window, *context.fonts, *context.sounds, PlayerBindingConfig::GetInstance().GetPlayerCount())
+	, m_players()
+	, m_sounds(*context.sounds)
 {
 	//Play the music
 	context.music->Play(MusicThemes::kMissionTheme);
 
 	auto& config = PlayerBindingConfig::GetInstance();
-	int player_count = 2; // Default to 2 players for now (will be dynamic in commit 4)
 
+	int player_count = config.GetPlayerCount();
+	player_count = std::max(1, std::min(player_count, PlayerBindingConfig::GetMaxPlayers()));
+
+	//Create players
 	for (int i = 0; i < player_count; ++i)
 	{
 		m_players.emplace_back(i);
@@ -22,10 +30,10 @@ GameState::GameState(StateStack& stack, Context context) : State(stack, context)
 
 	if (config.HasBindings())
 	{
-		std::cout << "[GAME] Using player bindings from binding screen:\n";
+		std::cout << "[GAME] Using player bindings from binding screen (" << player_count << " players):\n";
 
-		//Apply bindings from the binding screen
-		for (int i = 0; i < 2; ++i)
+		//Apply bindings from binding screen for all configured players
+		for (int i = 0; i < player_count; ++i)
 		{
 			auto device = config.GetPlayerDevice(i);
 			if (device.has_value())
@@ -42,14 +50,20 @@ GameState::GameState(StateStack& stack, Context context) : State(stack, context)
 					m_players[i].SetJoystickId(-1);
 				}
 			}
+			else
+			{
+				//Default fallback for unbound slots
+				m_players[i].SetJoystickId(-1);
+			}
 		}
 	}
 	else
 	{
-		//Fallback: Old auto assignment logic
-		std::cout << "[GAME] No bindings found, using auto-assignment\n";
+		//Fallback: old auto assignment logic across all runtime players
+		std::cout << "[GAME] No bindings found, using auto-assignment for " << player_count << " players\n";
+
 		int assigned_controllers = 0;
-		for (int i = 0; i < static_cast<int>(m_players.size()); ++i)
+		for (int i = 0; i < sf::Joystick::Count; ++i)
 		{
 			if (sf::Joystick::isConnected(i))
 			{
@@ -57,10 +71,9 @@ GameState::GameState(StateStack& stack, Context context) : State(stack, context)
 				std::cout << "Controller connected at startup: id=" << i
 					<< " name=\"" << id.name.toAnsiString() << "\"\n";
 
-				//Assign to next available player
 				if (assigned_controllers < static_cast<int>(m_players.size()))
 				{
-					m_players[assigned_controllers].SetJoystickId(static_cast<int>(i));
+					m_players[assigned_controllers].SetJoystickId(i);
 					std::cout << "[GAME] Assigned joystick " << i << " to player " << assigned_controllers << "\n";
 					assigned_controllers++;
 				}
