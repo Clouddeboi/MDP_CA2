@@ -363,24 +363,14 @@ bool NetworkSession::ConsumeRemotePlayerLeft(int& playerIndex)
     return true;
 }
 
-void GameServer::BroadcastLobbyBindingState(uint8_t playerIndex, int colorIndex, bool ready)
+void NetworkSession::HostBroadcastLobbyBindingState(int playerIndex, int colorIndex, bool ready)
 {
-    for (std::size_t i = 0; i < m_connected_players; ++i)
+    if (m_mode == NetworkMode::kHost && m_server)
     {
-        if (!m_peers[i]->m_ready)
-            continue;
-
-        sf::Packet p;
-        p << static_cast<std::uint8_t>(Server::PacketType::kLobbyBindingState);
-        p << playerIndex << static_cast<std::int32_t>(colorIndex) << ready;
-
-        auto status = m_peers[i]->m_socket.send(p);
-        int retries = 0;
-        while ((status == sf::Socket::Status::Partial || status == sf::Socket::Status::NotReady) && retries < 5)
-        {
-            sf::sleep(sf::milliseconds(5));
-            status = m_peers[i]->m_socket.send(p);
-            ++retries;
-        }
+        m_server->BroadcastLobbyBindingState(
+            static_cast<std::uint8_t>(playerIndex),
+            colorIndex,
+            ready
+        );
     }
 }
