@@ -188,11 +188,11 @@ void NetworkSession::SetError(const std::string& message)
     m_last_error = message;
 }
 
-void NetworkSession::SendLobbyBindingState(int colorIndex, bool ready)
+void NetworkSession::SendLobbyBindingState(int playerIndex, int colorIndex, bool ready)
 {
     if (m_mode == NetworkMode::kHost && m_server)
     {
-        m_server->BroadcastLobbyBindingState(0, colorIndex, ready); // Host is player 0
+        m_server->BroadcastLobbyBindingState(static_cast<std::uint8_t>(playerIndex), colorIndex, ready);
         return;
     }
 
@@ -200,18 +200,11 @@ void NetworkSession::SendLobbyBindingState(int colorIndex, bool ready)
     {
         sf::Packet p;
         p << static_cast<std::uint8_t>(Client::PacketType::kLobbyBindingState);
+        p << static_cast<std::uint8_t>(playerIndex);
         p << static_cast<std::int32_t>(colorIndex) << ready;
 
-        // Force reliable send for lobby traffic
         m_client_socket->setBlocking(true);
-        auto status = m_client_socket->send(p);
-        int retries = 0;
-        while ((status == sf::Socket::Status::Partial || status == sf::Socket::Status::NotReady) && retries < 5)
-        {
-            sf::sleep(sf::milliseconds(5));
-            status = m_client_socket->send(p);
-            ++retries;
-        }
+        (void)m_client_socket->send(p);
         m_client_socket->setBlocking(false);
     }
 }

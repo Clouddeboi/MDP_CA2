@@ -348,7 +348,7 @@ bool BindingState::Update(sf::Time dt)
 
 		if (localColor != m_last_sent_color || localReady != m_last_sent_ready || periodicSync)
 		{
-			GetContext().network->SendLobbyBindingState(localColor, localReady);
+			GetContext().network->SendLobbyBindingState(m_local_player_index, localColor, localReady);
 			m_last_sent_color = localColor;
 			m_last_sent_ready = localReady;
 
@@ -401,7 +401,7 @@ bool BindingState::HandleEvent(const sf::Event& event)
 				//Immediate sync
 				const int localColor = m_player_slots[i].GetSelectedColorIndex();
 				const bool localReady = m_player_slots[i].IsReady();
-				GetContext().network->SendLobbyBindingState(localColor, localReady);
+				GetContext().network->SendLobbyBindingState(m_local_player_index, localColor, localReady);
 				m_last_sent_color = localColor;
 				m_last_sent_ready = localReady;
 
@@ -420,7 +420,7 @@ bool BindingState::HandleEvent(const sf::Event& event)
 
 					const int localColor = m_player_slots[i].GetSelectedColorIndex();
 					const bool localReady = m_player_slots[i].IsReady();
-					GetContext().network->SendLobbyBindingState(localColor, localReady);
+					GetContext().network->SendLobbyBindingState(m_local_player_index, localColor, localReady);
 					m_last_sent_color = localColor;
 					m_last_sent_ready = localReady;
 
@@ -459,7 +459,7 @@ bool BindingState::HandleEvent(const sf::Event& event)
 
 				const int localColor = m_player_slots[i].GetSelectedColorIndex();
 				const bool localReady = m_player_slots[i].IsReady();
-				GetContext().network->SendLobbyBindingState(localColor, localReady);
+				GetContext().network->SendLobbyBindingState(m_local_player_index, localColor, localReady);
 				m_last_sent_color = localColor;
 				m_last_sent_ready = localReady;
 

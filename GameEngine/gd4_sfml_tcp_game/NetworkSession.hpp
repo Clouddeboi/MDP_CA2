@@ -50,7 +50,7 @@ public:
     NetworkMode GetMode() const;
 
     //Lobby sync
-    void SendLobbyBindingState(int colorIndex, bool ready);//host or client
+    void SendLobbyBindingState(int playerIndex, int colorIndex, bool ready);//host or client
     void SendLobbyStartRequest();//client -> host
     void SendLobbyStartGame();//host -> client(s)
     void SendLobbyLeave();

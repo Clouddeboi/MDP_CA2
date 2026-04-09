@@ -344,8 +344,10 @@ void GameServer::HandleIncomingPackets(sf::Packet& packet, RemotePeer& receiving
     break;
     case Client::PacketType::kLobbyBindingState:
     {
-        int32_t color = -1; bool ready = false;
-        packet >> color >> ready;
+        std::uint8_t playerIndex = 1;//Fallback
+        std::int32_t color = -1;
+        bool ready = false;
+        packet >> playerIndex >> color >> ready;
 
         {
             std::scoped_lock lock(m_lobby_mutex);
@@ -354,10 +356,9 @@ void GameServer::HandleIncomingPackets(sf::Packet& packet, RemotePeer& receiving
             m_has_client_lobby_state = true;
         }
 
-        BroadcastLobbyBindingState(1, static_cast<int>(color), ready);//Relay client state
+        BroadcastLobbyBindingState(playerIndex, static_cast<int>(color), ready);
     }
     break;
-
     case Client::PacketType::kLobbyStartGameRequest:
     {
         std::scoped_lock lock(m_lobby_mutex);
