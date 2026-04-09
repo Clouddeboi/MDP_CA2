@@ -4,6 +4,7 @@
 
 #include <SFML/Network/TcpSocket.hpp>
 #include <SFML/Network/IpAddress.hpp>
+#include <SFML/System/Sleep.hpp>
 
 NetworkSession::NetworkSession()
     : m_mode(NetworkMode::kNone)
@@ -191,16 +192,27 @@ void NetworkSession::SendLobbyBindingState(int colorIndex, bool ready)
 {
     if (m_mode == NetworkMode::kHost && m_server)
     {
-        m_server->BroadcastLobbyBindingState(0, colorIndex, ready);//Host is player 0
+        m_server->BroadcastLobbyBindingState(0, colorIndex, ready); // Host is player 0
         return;
     }
 
     if (m_mode == NetworkMode::kClient && m_client_socket && m_client_connected)
     {
         sf::Packet p;
-        p << static_cast<uint8_t>(Client::PacketType::kLobbyBindingState);
-        p << static_cast<int32_t>(colorIndex) << ready;
-        (void)m_client_socket->send(p);
+        p << static_cast<std::uint8_t>(Client::PacketType::kLobbyBindingState);
+        p << static_cast<std::int32_t>(colorIndex) << ready;
+
+        // Force reliable send for lobby traffic
+        m_client_socket->setBlocking(true);
+        auto status = m_client_socket->send(p);
+        int retries = 0;
+        while ((status == sf::Socket::Status::Partial || status == sf::Socket::Status::NotReady) && retries < 5)
+        {
+            sf::sleep(sf::milliseconds(5));
+            status = m_client_socket->send(p);
+            ++retries;
+        }
+        m_client_socket->setBlocking(false);
     }
 }
 
@@ -209,8 +221,18 @@ void NetworkSession::SendLobbyStartRequest()
     if (m_mode == NetworkMode::kClient && m_client_socket && m_client_connected)
     {
         sf::Packet p;
-        p << static_cast<uint8_t>(Client::PacketType::kLobbyStartGameRequest);
-        (void)m_client_socket->send(p);
+        p << static_cast<std::uint8_t>(Client::PacketType::kLobbyStartGameRequest);
+
+        m_client_socket->setBlocking(true);
+        auto status = m_client_socket->send(p);
+        int retries = 0;
+        while ((status == sf::Socket::Status::Partial || status == sf::Socket::Status::NotReady) && retries < 5)
+        {
+            sf::sleep(sf::milliseconds(5));
+            status = m_client_socket->send(p);
+            ++retries;
+        }
+        m_client_socket->setBlocking(false);
     }
 }
 
@@ -305,16 +327,26 @@ bool NetworkSession::ConsumeStartGameSignal()
 
 void NetworkSession::SendLobbyLeave()
 {
-    //Client notifies host
+    // Client notifies host
     if (m_mode == NetworkMode::kClient && m_client_socket && m_client_connected)
     {
         sf::Packet p;
         p << static_cast<std::uint8_t>(Client::PacketType::kLobbyLeave);
-        (void)m_client_socket->send(p);
+
+        m_client_socket->setBlocking(true);
+        auto status = m_client_socket->send(p);
+        int retries = 0;
+        while ((status == sf::Socket::Status::Partial || status == sf::Socket::Status::NotReady) && retries < 5)
+        {
+            sf::sleep(sf::milliseconds(5));
+            status = m_client_socket->send(p);
+            ++retries;
+        }
+        m_client_socket->setBlocking(false);
         return;
     }
 
-    //Host can also broadcast local leave if needed
+    // Host can also broadcast local leave if needed
     if (m_mode == NetworkMode::kHost && m_server)
     {
         m_server->BroadcastLobbyPlayerLeft(0);
@@ -331,14 +363,24 @@ bool NetworkSession::ConsumeRemotePlayerLeft(int& playerIndex)
     return true;
 }
 
-void NetworkSession::HostBroadcastLobbyBindingState(int playerIndex, int colorIndex, bool ready)
+void GameServer::BroadcastLobbyBindingState(uint8_t playerIndex, int colorIndex, bool ready)
 {
-    if (m_mode == NetworkMode::kHost && m_server)
+    for (std::size_t i = 0; i < m_connected_players; ++i)
     {
-        m_server->BroadcastLobbyBindingState(
-            static_cast<std::uint8_t>(playerIndex),
-            colorIndex,
-            ready
-        );
+        if (!m_peers[i]->m_ready)
+            continue;
+
+        sf::Packet p;
+        p << static_cast<std::uint8_t>(Server::PacketType::kLobbyBindingState);
+        p << playerIndex << static_cast<std::int32_t>(colorIndex) << ready;
+
+        auto status = m_peers[i]->m_socket.send(p);
+        int retries = 0;
+        while ((status == sf::Socket::Status::Partial || status == sf::Socket::Status::NotReady) && retries < 5)
+        {
+            sf::sleep(sf::milliseconds(5));
+            status = m_peers[i]->m_socket.send(p);
+            ++retries;
+        }
     }
 }

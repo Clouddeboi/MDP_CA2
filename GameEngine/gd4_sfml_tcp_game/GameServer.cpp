@@ -547,9 +547,23 @@ void GameServer::BroadcastLobbyBindingState(uint8_t playerIndex, int colorIndex,
 
 void GameServer::BroadcastLobbyStartGame()
 {
-    sf::Packet p;
-    p << static_cast<uint8_t>(Server::PacketType::kLobbyStartGame);
-    SendToAll(p);
+    for (std::size_t i = 0; i < m_connected_players; ++i)
+    {
+        if (!m_peers[i]->m_ready)
+            continue;
+
+        sf::Packet p;
+        p << static_cast<std::uint8_t>(Server::PacketType::kLobbyStartGame);
+
+        auto status = m_peers[i]->m_socket.send(p);
+        int retries = 0;
+        while ((status == sf::Socket::Status::Partial || status == sf::Socket::Status::NotReady) && retries < 5)
+        {
+            sf::sleep(sf::milliseconds(5));
+            status = m_peers[i]->m_socket.send(p);
+            ++retries;
+        }
+    }
 }
 
 bool GameServer::PollClientLobbyBindingState(int& colorIndex, bool& ready)
@@ -572,10 +586,24 @@ bool GameServer::PollClientStartRequest()
 
 void GameServer::BroadcastLobbyPlayerLeft(std::uint8_t playerIndex)
 {
-    sf::Packet p;
-    p << static_cast<std::uint8_t>(Server::PacketType::kLobbyPlayerLeft);
-    p << playerIndex;
-    SendToAll(p);
+    for (std::size_t i = 0; i < m_connected_players; ++i)
+    {
+        if (!m_peers[i]->m_ready)
+            continue;
+
+        sf::Packet p;
+        p << static_cast<std::uint8_t>(Server::PacketType::kLobbyPlayerLeft);
+        p << playerIndex;
+
+        auto status = m_peers[i]->m_socket.send(p);
+        int retries = 0;
+        while ((status == sf::Socket::Status::Partial || status == sf::Socket::Status::NotReady) && retries < 5)
+        {
+            sf::sleep(sf::milliseconds(5));
+            status = m_peers[i]->m_socket.send(p);
+            ++retries;
+        }
+    }
 }
 
 bool GameServer::PollClientLeave()
