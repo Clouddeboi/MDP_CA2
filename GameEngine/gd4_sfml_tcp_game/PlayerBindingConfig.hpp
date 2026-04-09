@@ -2,6 +2,7 @@
 #include "InputDevice.hpp"
 #include <array>
 #include <optional>
+#include <algorithm>
 
 /*
  * Code implementation assisted by Claude Sonnet 4.5
@@ -9,7 +10,7 @@
  * Original implementation, modified/adapted by Michal Becmer (D00256088) for project requirements
  */
 
-//Singleton to store player binding configuration between states
+ //Singleton to store player binding configuration between states
 class PlayerBindingConfig
 {
 public:
@@ -61,7 +62,17 @@ public:
 
 	void SetPlayerCount(int count)
 	{
-		m_player_count = count;
+		m_player_count = std::clamp(count, 1, kMaxPlayers);
+	}
+
+	int GetPlayerCount() const
+	{
+		return std::clamp(m_player_count, 1, kMaxPlayers);
+	}
+
+	static constexpr int GetMaxPlayers()
+	{
+		return kMaxPlayers;
 	}
 
 	void SetPlayerColor(int playerId, const sf::Color& color)
@@ -82,7 +93,7 @@ public:
 	}
 
 private:
-	static constexpr int kMaxPlayers = 2;
+	static constexpr int kMaxPlayers = 20;
 	std::array<std::optional<InputDeviceInfo>, kMaxPlayers> m_player_devices;
 	std::array<std::optional<sf::Color>, kMaxPlayers> m_player_colors;
 	int m_player_count = 2;
