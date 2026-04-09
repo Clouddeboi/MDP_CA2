@@ -272,10 +272,35 @@ bool BindingState::Update(sf::Time dt)
 		int leftIndex = -1;
 		if (GetContext().network->ConsumeRemotePlayerLeft(leftIndex))
 		{
-			GetContext().network->Reset();
-			RequestStackClear();
-			RequestStackPush(StateID::kMenu);
-			return false;
+			//Host sees client leave -> remove client from lobby, keep lobby open
+			if (GetContext().network->IsHosting() && leftIndex == 1)
+			{
+				if (GetJoinedPlayerCount() > 1)
+				{
+					RemovePlayer(1);
+				}
+
+				//Keep host slot interactive
+				m_player_slots[0].ShowColorPicker(true);
+				m_local_player_index = 0;
+
+				if (m_instructions_text)
+				{
+					m_instructions_text->setString("Client left. Waiting for player...");
+					m_instructions_text->setFillColor(sf::Color::Yellow);
+					Utility::CentreOrigin(*m_instructions_text);
+				}
+
+				//Do not close lobby
+			}
+			else
+			{
+				//Client sees host leave, or any other critical leave -> close lobby
+				GetContext().network->Reset();
+				RequestStackClear();
+				RequestStackPush(StateID::kMenu);
+				return false;
+			}
 		}
 
 		if (GetContext().network->ConsumeStartGameSignal())
