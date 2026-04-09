@@ -21,7 +21,8 @@ namespace Server
 		kMissionSuccess, // This has no arguments. It just informs the client that the game is over and the client can show the appropriate state
 		kLobbyBindingState,   //uint8 playerIndex, int32 colorIndex, bool ready
 		kLobbyStartGame, //no payload
-		kLobbyPlayerLeft
+		kLobbyPlayerLeft,
+		kLobbySnapshot
 	};
 }
 

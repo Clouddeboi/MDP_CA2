@@ -350,7 +350,7 @@ bool BindingState::HandleEvent(const sf::Event& event)
 			if (keyPressed->code == sf::Keyboard::Key::Escape ||
 				keyPressed->code == sf::Keyboard::Key::Backspace)
 			{
-				GetContext().network->SendLobbyLeave();
+				GetContext().network->SendLobbyLeave(m_local_player_index);
 				GetContext().network->Reset();
 				RequestStackClear();
 				RequestStackPush(StateID::kMenu);

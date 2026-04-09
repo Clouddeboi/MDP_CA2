@@ -35,6 +35,8 @@ public:
 	void BroadcastLobbyPlayerLeft(std::uint8_t playerIndex);
 	bool PollClientLeave(int& playerIndex);
 
+	void BroadcastLobbySnapshot();
+
 private:
 	struct RemotePeer
 	{
@@ -98,12 +100,10 @@ private:
 	sf::Time m_time_for_next_spawn;
 
 	std::mutex m_lobby_mutex;
-	bool m_has_client_lobby_state = false;
-	int m_client_lobby_color = -1;
-	bool m_client_lobby_ready = false;
 	bool m_client_start_requested = false;
-	bool m_client_left_requested = false;
 
 	std::deque<std::tuple<int, int, bool>> m_lobby_binding_events;//playerIndex, color, ready
 	std::deque<int> m_lobby_leave_events;
+
+	std::map<int, std::tuple<int, bool, bool>> m_lobby_state;
 };

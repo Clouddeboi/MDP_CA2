@@ -324,6 +324,34 @@ void NetworkSession::PollLobbyPackets()
 					p >> leftIdx;
 					m_pending_player_left_events.push_back(static_cast<int>(leftIdx));
 				}
+				else if (packetType == Server::PacketType::kLobbySnapshot)
+				{
+					std::uint8_t count = 0;
+					p >> count;
+
+					for (std::uint8_t i = 0; i < count; ++i)
+					{
+						std::uint8_t playerIdx = 0;
+						std::int32_t color = -1;
+						bool ready = false;
+						bool connected = false;
+
+						p >> playerIdx >> color >> ready >> connected;
+
+						if (connected)
+						{
+							m_pending_remote_binding_events.emplace_back(
+								static_cast<int>(playerIdx),
+								static_cast<int>(color),
+								ready
+							);
+						}
+						else
+						{
+							m_pending_player_left_events.push_back(static_cast<int>(playerIdx));
+						}
+					}
+				}
 
 				continue;
 			}
