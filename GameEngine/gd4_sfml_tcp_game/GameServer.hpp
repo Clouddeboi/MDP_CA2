@@ -13,6 +13,8 @@
 #include <string>
 #include <vector>
 #include <mutex>
+#include <deque>
+#include <tuple>
 
 class GameServer
 {
@@ -27,11 +29,11 @@ public:
 	void BroadcastLobbyBindingState(uint8_t playerIndex, int colorIndex, bool ready);
 	void BroadcastLobbyStartGame();
 
-	bool PollClientLobbyBindingState(int& colorIndex, bool& ready);
+	bool PollClientLobbyBindingState(int& playerIndex, int& colorIndex, bool& ready);
 	bool PollClientStartRequest();
 
 	void BroadcastLobbyPlayerLeft(std::uint8_t playerIndex);
-	bool PollClientLeave();
+	bool PollClientLeave(int& playerIndex);
 
 private:
 	struct RemotePeer
@@ -101,4 +103,7 @@ private:
 	bool m_client_lobby_ready = false;
 	bool m_client_start_requested = false;
 	bool m_client_left_requested = false;
+
+	std::deque<std::tuple<int, int, bool>> m_lobby_binding_events;//playerIndex, color, ready
+	std::deque<int> m_lobby_leave_events;
 };

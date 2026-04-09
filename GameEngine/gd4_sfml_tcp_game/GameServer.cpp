@@ -344,16 +344,14 @@ void GameServer::HandleIncomingPackets(sf::Packet& packet, RemotePeer& receiving
     break;
     case Client::PacketType::kLobbyBindingState:
     {
-        std::uint8_t playerIndex = 1;//Fallback
+        std::uint8_t playerIndex = 1;
         std::int32_t color = -1;
         bool ready = false;
         packet >> playerIndex >> color >> ready;
 
         {
             std::scoped_lock lock(m_lobby_mutex);
-            m_client_lobby_color = static_cast<int>(color);
-            m_client_lobby_ready = ready;
-            m_has_client_lobby_state = true;
+            m_lobby_binding_events.emplace_back(static_cast<int>(playerIndex), static_cast<int>(color), ready);
         }
 
         BroadcastLobbyBindingState(playerIndex, static_cast<int>(color), ready);
@@ -388,16 +386,17 @@ void GameServer::HandleIncomingPackets(sf::Packet& packet, RemotePeer& receiving
             SendToAll(packet);
         }
     }
-    break;
     case Client::PacketType::kLobbyLeave:
     {
+        std::uint8_t playerIndex = 1;
+        packet >> playerIndex;
+
         {
             std::scoped_lock lock(m_lobby_mutex);
-            m_client_left_requested = true;
+            m_lobby_leave_events.push_back(static_cast<int>(playerIndex));
         }
 
-        // Client is player index 1 in your current host/client binding model
-        BroadcastLobbyPlayerLeft(1);
+        BroadcastLobbyPlayerLeft(playerIndex);
     }
     break;
     }
@@ -587,13 +586,17 @@ void GameServer::BroadcastLobbyStartGame()
     }
 }
 
-bool GameServer::PollClientLobbyBindingState(int& colorIndex, bool& ready)
+bool GameServer::PollClientLobbyBindingState(int& playerIndex, int& colorIndex, bool& ready)
 {
     std::scoped_lock lock(m_lobby_mutex);
-    if (!m_has_client_lobby_state) return false;
-    colorIndex = m_client_lobby_color;
-    ready = m_client_lobby_ready;
-    m_has_client_lobby_state = false;
+    if (m_lobby_binding_events.empty()) return false;
+
+    auto e = m_lobby_binding_events.front();
+    m_lobby_binding_events.pop_front();
+
+    playerIndex = std::get<0>(e);
+    colorIndex = std::get<1>(e);
+    ready = std::get<2>(e);
     return true;
 }
 
@@ -627,10 +630,12 @@ void GameServer::BroadcastLobbyPlayerLeft(std::uint8_t playerIndex)
     }
 }
 
-bool GameServer::PollClientLeave()
+bool GameServer::PollClientLeave(int& playerIndex)
 {
     std::scoped_lock lock(m_lobby_mutex);
-    const bool left = m_client_left_requested;
-    m_client_left_requested = false;
-    return left;
+    if (m_lobby_leave_events.empty()) return false;
+
+    playerIndex = m_lobby_leave_events.front();
+    m_lobby_leave_events.pop_front();
+    return true;
 }
