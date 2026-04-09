@@ -116,6 +116,14 @@ BindingState::BindingState(StateStack& stack, Context context)
 		m_player_slots[m_local_player_index].ShowColorPicker(true);
 
 		m_instructions_text->setString("Network lobby: choose color and ready up");
+
+		m_player_slots[0].SelectColorAtIndex(0);
+		m_player_slots[1].SelectColorAtIndex(1);
+		RebuildColorTakenFromSlots();
+
+		// force first network send
+		m_last_sent_color = -999;
+		m_last_sent_ready = false;
 	}
 }
 
@@ -278,9 +286,11 @@ bool BindingState::Update(sf::Time dt)
 
 		if (localColor != m_last_sent_color || localReady != m_last_sent_ready)
 		{
-			GetContext().network->SendLobbyBindingState(localColor, localReady);
-			m_last_sent_color = localColor;
-			m_last_sent_ready = localReady;
+			const int localColorNow = m_player_slots[m_local_player_index].GetSelectedColorIndex();
+			const bool localReadyNow = m_player_slots[m_local_player_index].IsReady();
+			GetContext().network->SendLobbyBindingState(localColorNow, localReadyNow);
+			m_last_sent_color = localColorNow;
+			m_last_sent_ready = localReadyNow;
 		}
 	}
 	
@@ -664,92 +674,92 @@ bool BindingState::HandleEvent(const sf::Event& event)
 	}
 
 	//Network handling for binding state (host/client)
-	if (m_network_mode && GetContext().network)
-	{
-		const int i = m_local_player_index;
+	//if (m_network_mode && GetContext().network)
+	//{
+	//	const int i = m_local_player_index;
 
-		if (const auto* keyPressed = event.getIf<sf::Event::KeyPressed>())
-		{
-			//Leave lobby
-			if (keyPressed->code == sf::Keyboard::Key::Escape ||
-				keyPressed->code == sf::Keyboard::Key::Backspace)
-			{
-				GetContext().network->SendLobbyLeave();
-				GetContext().network->Reset();
-				RequestStackClear();
-				RequestStackPush(StateID::kMenu);
-				return false;
-			}
+	//	if (const auto* keyPressed = event.getIf<sf::Event::KeyPressed>())
+	//	{
+	//		//Leave lobby
+	//		if (keyPressed->code == sf::Keyboard::Key::Escape ||
+	//			keyPressed->code == sf::Keyboard::Key::Backspace)
+	//		{
+	//			GetContext().network->SendLobbyLeave();
+	//			GetContext().network->Reset();
+	//			RequestStackClear();
+	//			RequestStackPush(StateID::kMenu);
+	//			return false;
+	//		}
 
-			//Navigate color picker
-			if (m_player_slots[i].IsShowingColorPicker() &&
-				(keyPressed->code == sf::Keyboard::Key::W ||
-				 keyPressed->code == sf::Keyboard::Key::A ||
-				 keyPressed->code == sf::Keyboard::Key::S ||
-				 keyPressed->code == sf::Keyboard::Key::D ||
-				 keyPressed->code == sf::Keyboard::Key::Up ||
-				 keyPressed->code == sf::Keyboard::Key::Down ||
-				 keyPressed->code == sf::Keyboard::Key::Left ||
-				 keyPressed->code == sf::Keyboard::Key::Right))
-			{
-				int deltaX = 0, deltaY = 0;
-				if (keyPressed->code == sf::Keyboard::Key::W || keyPressed->code == sf::Keyboard::Key::Up) deltaY = -1;
-				if (keyPressed->code == sf::Keyboard::Key::S || keyPressed->code == sf::Keyboard::Key::Down) deltaY = 1;
-				if (keyPressed->code == sf::Keyboard::Key::A || keyPressed->code == sf::Keyboard::Key::Left) deltaX = -1;
-				if (keyPressed->code == sf::Keyboard::Key::D || keyPressed->code == sf::Keyboard::Key::Right) deltaX = 1;
+	//		//Navigate color picker
+	//		if (m_player_slots[i].IsShowingColorPicker() &&
+	//			(keyPressed->code == sf::Keyboard::Key::W ||
+	//			 keyPressed->code == sf::Keyboard::Key::A ||
+	//			 keyPressed->code == sf::Keyboard::Key::S ||
+	//			 keyPressed->code == sf::Keyboard::Key::D ||
+	//			 keyPressed->code == sf::Keyboard::Key::Up ||
+	//			 keyPressed->code == sf::Keyboard::Key::Down ||
+	//			 keyPressed->code == sf::Keyboard::Key::Left ||
+	//			 keyPressed->code == sf::Keyboard::Key::Right))
+	//		{
+	//			int deltaX = 0, deltaY = 0;
+	//			if (keyPressed->code == sf::Keyboard::Key::W || keyPressed->code == sf::Keyboard::Key::Up) deltaY = -1;
+	//			if (keyPressed->code == sf::Keyboard::Key::S || keyPressed->code == sf::Keyboard::Key::Down) deltaY = 1;
+	//			if (keyPressed->code == sf::Keyboard::Key::A || keyPressed->code == sf::Keyboard::Key::Left) deltaX = -1;
+	//			if (keyPressed->code == sf::Keyboard::Key::D || keyPressed->code == sf::Keyboard::Key::Right) deltaX = 1;
 
-				m_player_slots[i].NavigateColorGrid(deltaX, deltaY);
-				GetContext().sounds->Play(SoundEffect::kButtonClick);
-				return false;
-			}
+	//			m_player_slots[i].NavigateColorGrid(deltaX, deltaY);
+	//			GetContext().sounds->Play(SoundEffect::kButtonClick);
+	//			return false;
+	//		}
 
-			//Confirm/ready/start
-			if (keyPressed->code == sf::Keyboard::Key::Enter || keyPressed->code == sf::Keyboard::Key::Space)
-			{
-				//First confirm color if picker open
-				if (m_player_slots[i].IsShowingColorPicker())
-				{
-					m_player_slots[i].ConfirmColorSelection();
-					m_player_slots[i].SetReady(true);
-					GetContext().sounds->Play(SoundEffect::kPairedPlayer);
-					return false;
-				}
+	//		//Confirm/ready/start
+	//		if (keyPressed->code == sf::Keyboard::Key::Enter || keyPressed->code == sf::Keyboard::Key::Space)
+	//		{
+	//			//First confirm color if picker open
+	//			if (m_player_slots[i].IsShowingColorPicker())
+	//			{
+	//				m_player_slots[i].ConfirmColorSelection();
+	//				m_player_slots[i].SetReady(true);
+	//				GetContext().sounds->Play(SoundEffect::kPairedPlayer);
+	//				return false;
+	//			}
 
-				//If all ready, host starts, client requests start
-				if (AreAllPlayersReady())
-				{
-					if (GetContext().network->IsHosting())
-					{
-						GetContext().network->SendLobbyStartGame();
-						GetContext().sounds->Play(SoundEffect::kStartGame);
+	//			//If all ready, host starts, client requests start
+	//			if (AreAllPlayersReady())
+	//			{
+	//				if (GetContext().network->IsHosting())
+	//				{
+	//					GetContext().network->SendLobbyStartGame();
+	//					GetContext().sounds->Play(SoundEffect::kStartGame);
 
-						RequestStackPop();
-						RequestStackPush(StateID::kGame);
-					}
-					else
-					{
-						GetContext().network->SendLobbyStartRequest();
-						GetContext().sounds->Play(SoundEffect::kButtonClick);
-					}
-					return false;
-				}
+	//					RequestStackPop();
+	//					RequestStackPush(StateID::kGame);
+	//				}
+	//				else
+	//				{
+	//					GetContext().network->SendLobbyStartRequest();
+	//					GetContext().sounds->Play(SoundEffect::kButtonClick);
+	//				}
+	//				return false;
+	//			}
 
-				//Otherwise toggle local ready
-				const bool currentReady = m_player_slots[i].IsReady();
-				m_player_slots[i].SetReady(!currentReady);
+	//			//Otherwise toggle local ready
+	//			const bool currentReady = m_player_slots[i].IsReady();
+	//			m_player_slots[i].SetReady(!currentReady);
 
-				if (currentReady)
-				{
-					m_player_slots[i].ShowColorPicker(true);
-				}
+	//			if (currentReady)
+	//			{
+	//				m_player_slots[i].ShowColorPicker(true);
+	//			}
 
-				GetContext().sounds->Play(SoundEffect::kButtonClick);
-				return false;
-			}
-		}
+	//			GetContext().sounds->Play(SoundEffect::kButtonClick);
+	//			return false;
+	//		}
+	//	}
 
-		return true;
-	}
+	//	return true;
+	//}
 
 	return false;
 }
