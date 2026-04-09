@@ -59,4 +59,7 @@ private:
 	int m_local_player_index = 0;
 	int m_last_sent_color = -1;
 	bool m_last_sent_ready = false;
+
+	sf::Time m_network_sync_timer = sf::Time::Zero;
+	sf::Time m_network_sync_interval = sf::milliseconds(250);
 };

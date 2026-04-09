@@ -10,7 +10,7 @@
 GameServer::GameServer(sf::Vector2f battlefield_size)
     : m_thread()
     , m_listening_state(false)
-    , m_client_timeout(sf::seconds(1.f))
+    , m_client_timeout(sf::seconds(120.f))
     , m_max_connected_players(20)
     , m_connected_players(0)
     , m_world_height(5000.f)

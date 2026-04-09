@@ -18,6 +18,7 @@ BindingState::BindingState(StateStack& stack, Context context)
 	, m_device_detector()
 	, m_joined_players()
 	, m_elapsed_time(sf::Time::Zero)
+	, m_network_sync_timer(sf::Time::Zero)
 {
 	sf::RenderWindow& window = *GetContext().window;
 	sf::Vector2f windowSize(window.getSize());
@@ -287,11 +288,17 @@ bool BindingState::Update(sf::Time dt)
 		const int localColor = m_player_slots[m_local_player_index].GetSelectedColorIndex();
 		const bool localReady = m_player_slots[m_local_player_index].IsReady();
 
-		if (localColor != m_last_sent_color || localReady != m_last_sent_ready)
+		m_network_sync_timer += dt;
+		const bool periodicSync = (m_network_sync_timer >= m_network_sync_interval);
+
+		if (localColor != m_last_sent_color || localReady != m_last_sent_ready || periodicSync)
 		{
 			GetContext().network->SendLobbyBindingState(localColor, localReady);
 			m_last_sent_color = localColor;
 			m_last_sent_ready = localReady;
+
+			if (periodicSync)
+				m_network_sync_timer = sf::Time::Zero;
 		}
 	}
 
