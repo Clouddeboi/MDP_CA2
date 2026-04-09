@@ -344,18 +344,20 @@ void GameServer::HandleIncomingPackets(sf::Packet& packet, RemotePeer& receiving
     break;
     case Client::PacketType::kLobbyBindingState:
     {
-        std::uint8_t playerIndex = 1;//Fallback
+        std::uint8_t clientSentIndex = 0;
         std::int32_t color = -1;
         bool ready = false;
-        packet >> playerIndex >> color >> ready;
+        packet >> clientSentIndex >> color >> ready;
+
+        const int playerIndex = (receiving_peer.m_lobby_player_index >= 0) ? receiving_peer.m_lobby_player_index : 1;
 
         {
             std::scoped_lock lock(m_lobby_mutex);
-            m_lobby_binding_events.emplace_back(static_cast<int>(playerIndex), static_cast<int>(color), ready);
-            m_lobby_state[static_cast<int>(playerIndex)] = std::make_tuple(static_cast<int>(color), ready, true);
+            m_lobby_binding_events.emplace_back(playerIndex, static_cast<int>(color), ready);
+            m_lobby_state[playerIndex] = std::make_tuple(static_cast<int>(color), ready, true);
         }
 
-        BroadcastLobbyBindingState(playerIndex, static_cast<int>(color), ready);
+        BroadcastLobbyBindingState(static_cast<std::uint8_t>(playerIndex), static_cast<int>(color), ready);
         BroadcastLobbySnapshot();
     }
     break;
@@ -391,16 +393,18 @@ void GameServer::HandleIncomingPackets(sf::Packet& packet, RemotePeer& receiving
     break;
     case Client::PacketType::kLobbyLeave:
     {
-        std::uint8_t playerIndex = 1;//Fallback
-        packet >> playerIndex;
+        std::uint8_t clientSentIndex = 0;
+        packet >> clientSentIndex;
+
+        const int playerIndex = (receiving_peer.m_lobby_player_index >= 0) ? receiving_peer.m_lobby_player_index : 1;
 
         {
             std::scoped_lock lock(m_lobby_mutex);
-            m_lobby_leave_events.push_back(static_cast<int>(playerIndex));
-            m_lobby_state[static_cast<int>(playerIndex)] = std::make_tuple(-1, false, false);
+            m_lobby_leave_events.push_back(playerIndex);
+            m_lobby_state[playerIndex] = std::make_tuple(-1, false, false);
         }
 
-        BroadcastLobbyPlayerLeft(playerIndex);
+        BroadcastLobbyPlayerLeft(static_cast<std::uint8_t>(playerIndex));
         BroadcastLobbySnapshot();
     }
     break;
@@ -416,7 +420,16 @@ void GameServer::HandleIncomingConnections()
 
     if (m_listener_socket.accept(m_peers[m_connected_players]->m_socket) == sf::TcpListener::Status::Done)
     {
-        //Order the new client to spawn its player 1
+        EnsureHostLobbyState();
+
+        // assign stable lobby index for this peer
+        int assignedLobbyIndex = FindFreeLobbyPlayerIndex();
+        if (assignedLobbyIndex < 0)
+        {
+            assignedLobbyIndex = static_cast<int>(m_connected_players + 1);
+        }
+        m_peers[m_connected_players]->m_lobby_player_index = assignedLobbyIndex;
+
         m_aircraft_info[m_aircraft_identifier_counter].m_position = sf::Vector2f(m_battlefield_rect.size.x / 2, m_battlefield_rect.position.y + m_battlefield_rect.size.y / 2);
         m_aircraft_info[m_aircraft_identifier_counter].m_hitpoints = 100;
         m_aircraft_info[m_aircraft_identifier_counter].m_missile_ammo = 2;
@@ -436,6 +449,12 @@ void GameServer::HandleIncomingConnections()
         m_peers[m_connected_players]->m_socket.send(packet);
         m_peers[m_connected_players]->m_ready = true;
         m_peers[m_connected_players]->m_last_packet_time = Now();
+
+        {
+            std::scoped_lock lock(m_lobby_mutex);
+            m_lobby_state[assignedLobbyIndex] = std::make_tuple(assignedLobbyIndex, false, true);
+        }
+        BroadcastLobbySnapshot();
 
         m_aircraft_count++;
         m_connected_players++;
@@ -458,11 +477,7 @@ void GameServer::HandleDisconnections()
         if ((*itr)->m_timed_out)
         {
             //Best-effort resolve index from peer aircraft id list, fallback to 1
-            int leftIndex = 1;
-            if (!(*itr)->m_aircraft_identifiers.empty())
-            {
-                leftIndex = static_cast<int>((*itr)->m_aircraft_identifiers.front());
-            }
+            int leftIndex = ((*itr)->m_lobby_player_index >= 0) ? (*itr)->m_lobby_player_index : 1;
 
             //Mark lobby leave + authoritative disconnected state
             {
@@ -687,4 +702,31 @@ void GameServer::BroadcastLobbySnapshot()
     }
 
     SendToAll(p);
+}
+
+void GameServer::EnsureHostLobbyState()
+{
+    std::scoped_lock lock(m_lobby_mutex);
+    if (m_lobby_state.find(0) == m_lobby_state.end())
+    {
+        //Host default state
+        m_lobby_state[0] = std::make_tuple(0, false, true);
+    }
+}
+
+int GameServer::FindFreeLobbyPlayerIndex() const
+{
+    //0 reserved for host, remotes start at 1
+    for (int i = 1; i < static_cast<int>(m_max_connected_players); ++i)
+    {
+        auto it = m_lobby_state.find(i);
+        if (it == m_lobby_state.end())
+            return i;
+
+        const bool connected = std::get<2>(it->second);
+        if (!connected)
+            return i;
+    }
+
+    return -1;
 }

@@ -106,23 +106,22 @@ BindingState::BindingState(StateStack& stack, Context context)
 	if (m_network_mode)
 	{
 		m_joined_players.clear();
-
-		AddPlayer(InputDeviceInfo(InputDeviceType::kKeyboardMouse, -1)); // slot 0
-		AddPlayer(InputDeviceInfo(InputDeviceType::kKeyboardMouse, -1)); // slot 1
-
+		//Slots are now created by authoritative network updates/snapshots.
+		//Local player index defaults by role:
+		//Host = 0, clients will be updated once authoritative snapshot events arrive.
 		m_local_player_index = GetContext().network->IsHosting() ? 0 : 1;
 
-		//Deterministic defaults to avoid both picking same startup color
-		m_player_slots[0].SelectColorAtIndex(0);
-		m_player_slots[1].SelectColorAtIndex(1);
-		m_player_slots[0].SetReady(false);
-		m_player_slots[1].SetReady(false);
+		//Ensure local host slot exists immediately for host UX
+		if (GetContext().network->IsHosting())
+		{
+			EnsurePlayerSlotExists(m_local_player_index);
 
-		m_player_slots[0].ShowColorPicker(false);
-		m_player_slots[1].ShowColorPicker(false);
-		m_player_slots[m_local_player_index].ShowColorPicker(true);
-
-		RebuildColorTakenFromSlots();
+			//Deterministic host default
+			m_player_slots[m_local_player_index].SelectColorAtIndex(0);
+			m_player_slots[m_local_player_index].SetReady(false);
+			m_player_slots[m_local_player_index].ShowColorPicker(true);
+			RebuildColorTakenFromSlots();
+		}
 
 		//Force first outbound sync
 		m_last_sent_color = -999;
@@ -235,11 +234,7 @@ bool BindingState::Update(sf::Time dt)
 		//Consume all queued updates, not just one
 		while (GetContext().network->ConsumeRemoteBindingState(player, color, ready))
 		{
-			//Ensure remote slot exists (generalized, no hardcoded slot 1)
-			if (GetContext().network->IsHosting())
-			{
-				EnsurePlayerSlotExists(player);
-			}
+			EnsurePlayerSlotExists(player);
 
 			ApplyRemoteSlotState(player, color, ready);
 			RebuildColorTakenFromSlots();
@@ -285,13 +280,26 @@ bool BindingState::Update(sf::Time dt)
 				if (leftIndex >= 0 && leftIndex < GetJoinedPlayerCount())
 				{
 					RemovePlayer(leftIndex);
+					if (leftIndex < m_local_player_index)
+					{
+						//Removal shifted local slot left by one
+						m_local_player_index--;
+					}
 				}
 
 				//Keep host slot interactive
-				m_local_player_index = 0;
-				if (GetJoinedPlayerCount() > 0)
+				if (m_local_player_index >= 0 && m_local_player_index < GetJoinedPlayerCount())
 				{
 					m_player_slots[m_local_player_index].ShowColorPicker(true);
+				}
+				else
+				{
+					//fallback if local index was shifted by remove
+					m_local_player_index = 0;
+					if (GetJoinedPlayerCount() > 0)
+					{
+						m_player_slots[m_local_player_index].ShowColorPicker(true);
+					}
 				}
 
 				if (m_instructions_text)

@@ -46,6 +46,8 @@ private:
 		std::vector<uint8_t> m_aircraft_identifiers;
 		bool m_ready;
 		bool m_timed_out;
+
+		int m_lobby_player_index = -1;
 	};
 
 	struct AircraftInfo
@@ -74,6 +76,9 @@ private:
 	void BroadcastMessage(const std::string& message);
 	void SendToAll(sf::Packet& packet);
 	void UpdateClientState();
+
+	int FindFreeLobbyPlayerIndex() const;
+	void EnsureHostLobbyState();
 
 private:
 	std::thread m_thread;
