@@ -148,6 +148,9 @@ void NetworkSession::Reset()
 	m_pending_remote_binding_events.clear();
 	m_pending_start_game = false;
 	m_pending_player_left_events.clear();
+
+	m_pending_assigned_local_player_index = -1;
+	m_has_pending_assigned_local_player_index = false;
 }
 
 bool NetworkSession::IsActive() const
@@ -352,6 +355,14 @@ void NetworkSession::PollLobbyPackets()
 						}
 					}
 				}
+				else if (packetType == Server::PacketType::kLobbyAssignedIndex)
+				{
+					std::uint8_t assigned = 0;
+					p >> assigned;
+
+					m_pending_assigned_local_player_index = static_cast<int>(assigned);
+					m_has_pending_assigned_local_player_index = true;
+				}
 
 				continue;
 			}
@@ -409,4 +420,15 @@ void NetworkSession::HostBroadcastLobbyBindingState(int playerIndex, int colorIn
 			ready
 		);
 	}
+}
+
+bool NetworkSession::ConsumeAssignedLocalPlayerIndex(int& playerIndex)
+{
+	if (!m_has_pending_assigned_local_player_index)
+		return false;
+
+	playerIndex = m_pending_assigned_local_player_index;
+	m_has_pending_assigned_local_player_index = false;
+	m_pending_assigned_local_player_index = -1;
+	return true;
 }

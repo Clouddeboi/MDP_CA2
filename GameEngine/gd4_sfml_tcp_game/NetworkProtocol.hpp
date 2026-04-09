@@ -22,7 +22,8 @@ namespace Server
 		kLobbyBindingState,   //uint8 playerIndex, int32 colorIndex, bool ready
 		kLobbyStartGame, //no payload
 		kLobbyPlayerLeft,
-		kLobbySnapshot
+		kLobbySnapshot,
+		kLobbyAssignedIndex
 	};
 }
 

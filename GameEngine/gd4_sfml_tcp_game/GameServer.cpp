@@ -422,7 +422,7 @@ void GameServer::HandleIncomingConnections()
     {
         EnsureHostLobbyState();
 
-        // assign stable lobby index for this peer
+        //Assign stable lobby index for this peer
         int assignedLobbyIndex = FindFreeLobbyPlayerIndex();
         if (assignedLobbyIndex < 0)
         {
@@ -449,6 +449,12 @@ void GameServer::HandleIncomingConnections()
         m_peers[m_connected_players]->m_socket.send(packet);
         m_peers[m_connected_players]->m_ready = true;
         m_peers[m_connected_players]->m_last_packet_time = Now();
+
+        //Send assigned index BEFORE incrementing m_connected_players
+        sf::Packet assignedPacket;
+        assignedPacket << static_cast<std::uint8_t>(Server::PacketType::kLobbyAssignedIndex);
+        assignedPacket << static_cast<std::uint8_t>(assignedLobbyIndex);
+        m_peers[m_connected_players]->m_socket.send(assignedPacket);
 
         {
             std::scoped_lock lock(m_lobby_mutex);

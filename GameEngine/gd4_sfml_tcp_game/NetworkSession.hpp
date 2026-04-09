@@ -65,6 +65,7 @@ public:
 	bool ConsumeStartGameSignal();
 
 	void HostBroadcastLobbyBindingState(int playerIndex, int colorIndex, bool ready);
+	bool ConsumeAssignedLocalPlayerIndex(int& playerIndex);
 
 	const std::string& GetLastError() const;
 
@@ -85,4 +86,7 @@ private:
 	std::deque<std::tuple<int, int, bool>> m_pending_remote_binding_events;
 	bool m_pending_start_game = false;
 	std::deque<int> m_pending_player_left_events;
+
+	int m_pending_assigned_local_player_index = -1;
+	bool m_has_pending_assigned_local_player_index = false;
 };
