@@ -232,9 +232,28 @@ bool BindingState::Update(sf::Time dt)
 		int color = -1;
 		bool ready = false;
 
-		// IMPORTANT: consume all queued updates, not just one
+		//Consume all queued updates, not just one
 		while (GetContext().network->ConsumeRemoteBindingState(player, color, ready))
 		{
+			//If host receives client state after client rejoined, ensure slot 1 exists again
+			if (GetContext().network->IsHosting() && player == 1)
+			{
+				if (GetJoinedPlayerCount() < 2)
+				{
+					//Re-create remote player slot (client)
+					AddPlayer(InputDeviceInfo(InputDeviceType::kKeyboardMouse, -1));
+					m_player_slots[1].ShowColorPicker(false);//Host must not control client slot
+					m_player_slots[1].SetReady(false);
+
+					if (m_instructions_text)
+					{
+						m_instructions_text->setString("Client connected. Waiting for ready...");
+						m_instructions_text->setFillColor(sf::Color::Cyan);
+						Utility::CentreOrigin(*m_instructions_text);
+					}
+				}
+			}
+
 			ApplyRemoteSlotState(player, color, ready);
 			RebuildColorTakenFromSlots();
 
