@@ -219,17 +219,31 @@ void GameServer::HandleIncomingPackets()
     {
         if (peer->m_ready)
         {
-            sf::Packet packet;
-            while (peer->m_socket.receive(packet) == sf::Socket::Status::Done)
+            while (true)
             {
-                //Interpret the packet and react to it
-                HandleIncomingPackets(packet, *peer, detected_timeout);
+                sf::Packet packet;
+                const auto status = peer->m_socket.receive(packet);
 
-                peer->m_last_packet_time = Now();
-                packet.clear();
+                if (status == sf::Socket::Status::Done)
+                {
+                    //Interpret the packet and react to it
+                    HandleIncomingPackets(packet, *peer, detected_timeout);
+                    peer->m_last_packet_time = Now();
+                }
+                else if (status == sf::Socket::Status::Disconnected)
+                {
+                    //Immediate disconnect handling (no timeout wait)
+                    peer->m_timed_out = true;
+                    detected_timeout = true;
+                    break;
+                }
+                else
+                {
+                    break;
+                }
             }
 
-            if (Now() > peer->m_last_packet_time + m_client_timeout)
+            if (!peer->m_timed_out && Now() > peer->m_last_packet_time + m_client_timeout)
             {
                 peer->m_timed_out = true;
                 detected_timeout = true;
