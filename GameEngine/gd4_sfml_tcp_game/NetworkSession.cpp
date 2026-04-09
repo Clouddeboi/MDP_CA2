@@ -314,7 +314,7 @@ void NetworkSession::PollLobbyPackets()
 
             if (status == sf::Socket::Status::Disconnected)
             {
-                // host went away
+                //Host went away
                 m_client_connected = false;
                 m_pending_player_left_events.push_back(0);
             }

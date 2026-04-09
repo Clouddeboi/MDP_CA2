@@ -270,8 +270,12 @@ bool BindingState::Update(sf::Time dt)
 		}
 
 		int leftIndex = -1;
-		if (GetContext().network->ConsumeRemotePlayerLeft(leftIndex))
+		bool anyLeaveProcessed = false;
+
+		while (GetContext().network->ConsumeRemotePlayerLeft(leftIndex))
 		{
+			anyLeaveProcessed = true;
+
 			//Host sees client leave -> remove client from lobby, keep lobby open
 			if (GetContext().network->IsHosting() && leftIndex == 1)
 			{
@@ -290,17 +294,24 @@ bool BindingState::Update(sf::Time dt)
 					m_instructions_text->setFillColor(sf::Color::Yellow);
 					Utility::CentreOrigin(*m_instructions_text);
 				}
-
-				//Do not close lobby
 			}
 			else
 			{
-				//Client sees host leave, or any other critical leave -> close lobby
+				//Client sees host leave, or any critical leave -> close lobby
 				GetContext().network->Reset();
 				RequestStackClear();
 				RequestStackPush(StateID::kMenu);
 				return false;
 			}
+		}
+
+		//Guard if queue had multiple events
+		if (anyLeaveProcessed && !GetContext().network->IsHosting())
+		{
+			GetContext().network->Reset();
+			RequestStackClear();
+			RequestStackPush(StateID::kMenu);
+			return false;
 		}
 
 		if (GetContext().network->ConsumeStartGameSignal())
