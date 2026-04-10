@@ -10,6 +10,7 @@
 #include "EditorState.hpp"
 #include "HostLobbyState.hpp"
 #include "JoinByIpState.hpp"
+#include "MultiplayerGameState.hpp"
 
 const sf::Time Application::kTimePerFrame = sf::seconds(1.f/60.f);
 
@@ -89,6 +90,7 @@ void Application::RegisterStates()
 	m_stack.RegisterState<MenuState>(StateID::kMenu);
 	m_stack.RegisterState<BindingState>(StateID::kBinding);
 	m_stack.RegisterState<GameState>(StateID::kGame);
+	m_stack.RegisterState<MultiplayerGameState>(StateID::kMultiplayerGame);
 	m_stack.RegisterState<PauseState>(StateID::kPause);
 	m_stack.RegisterState<SettingsState>(StateID::kSettings);
 	m_stack.RegisterState<GameOverState>(StateID::kGameOver);

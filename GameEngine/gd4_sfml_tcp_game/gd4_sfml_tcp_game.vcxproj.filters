@@ -183,6 +183,9 @@
     <ClCompile Include="JoinByIpState.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="MultiplayerGameState.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="Game.hpp">
@@ -414,6 +417,9 @@
       <Filter>Header Files</Filter>
     </ClInclude>
     <ClInclude Include="JoinByIpState.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="MultiplayerGameState.hpp">
       <Filter>Header Files</Filter>
     </ClInclude>
   </ItemGroup>

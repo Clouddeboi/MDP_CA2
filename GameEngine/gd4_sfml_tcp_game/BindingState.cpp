@@ -227,13 +227,13 @@ bool BindingState::Update(sf::Time dt)
 	{
 		GetContext().network->PollLobbyPackets();
 
-		int assignedLocalIndex = -1;
-		if (GetContext().network->ConsumeAssignedLocalPlayerIndex(assignedLocalIndex))
-		{
-			m_local_player_index = assignedLocalIndex;
-			EnsurePlayerSlotExists(m_local_player_index);
-			m_player_slots[m_local_player_index].ShowColorPicker(true);
-		}
+		//int assignedLocalIndex = -1;
+		//if (GetContext().network->ConsumeAssignedLocalPlayerIndex(assignedLocalIndex))
+		//{
+		//	m_local_player_index = assignedLocalIndex;
+		//	EnsurePlayerSlotExists(m_local_player_index);
+		//	m_player_slots[m_local_player_index].ShowColorPicker(true);
+		//}
 
 		int player = -1;
 		int color = -1;
@@ -330,7 +330,7 @@ bool BindingState::Update(sf::Time dt)
 		if (GetContext().network->ConsumeStartGameSignal())
 		{
 			RequestStackPop();
-			RequestStackPush(StateID::kGame);
+			RequestStackPush(StateID::kMultiplayerGame);
 			return false;
 		}
 
@@ -436,7 +436,7 @@ bool BindingState::HandleEvent(const sf::Event& event)
 						GetContext().sounds->Play(SoundEffect::kStartGame);
 
 						RequestStackPop();
-						RequestStackPush(StateID::kGame);
+						RequestStackPush(StateID::kMultiplayerGame);
 					}
 					else
 					{
