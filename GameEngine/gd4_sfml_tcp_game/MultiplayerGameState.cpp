@@ -198,6 +198,22 @@ bool MultiplayerGameState::Update(sf::Time dt)
 		GetContext().network->SendGameplayPacket(p);
 	}
 
+	//Smooth remote actor movement
+	for (auto& kv : m_remote_interp)
+	{
+		const std::uint8_t id = kv.first;
+		auto& st = kv.second;
+
+		if (!st.initialized)
+			continue;
+
+		const sf::Vector2f delta = st.target - st.current;
+		const float lerpFactor = std::min(1.f, dt.asSeconds() * 12.f);//Smoothing speed
+		st.current += delta * lerpFactor;
+
+		m_world.UpdateNetworkActorState(id, st.current, st.hp, st.ammo);
+	}
+
 	return true;
 }
 
