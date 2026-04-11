@@ -58,15 +58,24 @@ void MultiplayerGameState::Draw()
 
 bool MultiplayerGameState::Update(sf::Time dt)
 {
+   sf::Clock update_timer;
+	m_perf.sample_window += dt;
+	++m_perf.frames;
+
 	if (GetContext().network && GetContext().network->IsClient())
 	{
+      sf::Clock section_timer;
 		PollNetworkGameplay();
+       m_perf.net_poll_time_total += section_timer.getElapsedTime();
 	}
 
+ sf::Clock world_timer;
 	m_world.Update(dt);
+	m_perf.world_update_time_total += world_timer.getElapsedTime();
 
 	if (m_has_new_snapshot)
 	{
+     sf::Clock snapshot_timer;
 		for (const auto& s : m_latest_snapshot)
 		{
 			//Local known actor path
@@ -114,6 +123,7 @@ bool MultiplayerGameState::Update(sf::Time dt)
 		}
 
 		m_has_new_snapshot = false;
+       m_perf.snapshot_apply_time_total += snapshot_timer.getElapsedTime();
 	}
 
 	if (m_world.ShouldReturnToMenu())
@@ -149,6 +159,7 @@ bool MultiplayerGameState::Update(sf::Time dt)
 	}
 
 	m_state_send_timer += dt;
+    m_state_force_send_timer += dt;
 	if (GetContext().network && GetContext().network->IsClient() && m_state_send_timer >= m_state_send_interval)
 	{
 		m_state_send_timer = sf::Time::Zero;
@@ -156,35 +167,55 @@ bool MultiplayerGameState::Update(sf::Time dt)
 		sf::Packet p;
 		p << static_cast<std::uint8_t>(Client::PacketType::kStateUpdate);
 
-		std::uint8_t num_local_aircraft = 0;
+        std::vector<std::uint8_t> changed_ids;
+		changed_ids.reserve(m_players.size());
 
-		//First pass: count only local slots with authoritative aircraft id mapping
+		const bool force_send = m_state_force_send_timer >= m_state_force_send_interval;
+
 		for (size_t i = 0; i < m_players.size(); ++i)
 		{
-			if (m_local_player_to_aircraft_id.find(static_cast<int>(i)) == m_local_player_to_aircraft_id.end())
-				continue;
-
-			Aircraft* a = m_world.GetPlayerAircraft(static_cast<int>(i));
-			if (a)
-			{
-				++num_local_aircraft;
-			}
-		}
-
-		p << num_local_aircraft;
-
-		//Second pass: payload for each authoritative local aircraft
-		for (size_t i = 0; i < m_players.size(); ++i)
-		{
-			auto idIt = m_local_player_to_aircraft_id.find(static_cast<int>(i));
+         auto idIt = m_local_player_to_aircraft_id.find(static_cast<int>(i));
 			if (idIt == m_local_player_to_aircraft_id.end())
 				continue;
 
 			Aircraft* a = m_world.GetPlayerAircraft(static_cast<int>(i));
-			if (!a)
+          if (!a)
 				continue;
 
 			const std::uint8_t aircraft_identifier = idIt->second;
+			const sf::Vector2f pos = a->getPosition();
+			const std::uint8_t hp = static_cast<std::uint8_t>(std::max(0, std::min(255, a->GetHitPoints())));
+			const std::uint8_t ammo = 0;
+
+			auto& last = m_last_sent_local_states[aircraft_identifier];
+			const float dx = pos.x - last.position.x;
+			const float dy = pos.y - last.position.y;
+			const float moved_sq = dx * dx + dy * dy;
+
+			const bool changed = !last.initialized
+				|| moved_sq >= 4.f
+				|| hp != last.hp
+				|| ammo != last.ammo
+				|| force_send;
+
+			if (changed)
+			{
+				changed_ids.push_back(aircraft_identifier);
+			}
+		}
+
+        p << static_cast<std::uint8_t>(changed_ids.size());
+
+        for (std::uint8_t aircraft_identifier : changed_ids)
+		{
+            auto localSlotIt = m_net_to_local_player_index.find(aircraft_identifier);
+			if (localSlotIt == m_net_to_local_player_index.end())
+				continue;
+
+			Aircraft* a = m_world.GetPlayerAircraft(localSlotIt->second);
+			if (!a)
+				continue;
+
 			const sf::Vector2f pos = a->getPosition();
 			const std::uint8_t hp = static_cast<std::uint8_t>(std::max(0, std::min(255, a->GetHitPoints())));
 			const std::uint8_t ammo = 0;
@@ -194,12 +225,29 @@ bool MultiplayerGameState::Update(sf::Time dt)
 				<< pos.y
 				<< hp
 				<< ammo;
+
+			auto& last = m_last_sent_local_states[aircraft_identifier];
+			last.position = pos;
+			last.hp = hp;
+			last.ammo = ammo;
+			last.initialized = true;
 		}
 
-		GetContext().network->SendGameplayPacket(p);
+        if (!changed_ids.empty() || force_send)
+		{
+			GetContext().network->SendGameplayPacket(p);
+			++m_perf.tx_packets;
+			m_perf.tx_bytes += p.getDataSize();
+		}
+
+		if (force_send)
+		{
+			m_state_force_send_timer = sf::Time::Zero;
+		}
 	}
 
 	//Smooth remote actor movement
+    sf::Clock interp_timer;
 	for (auto& kv : m_remote_interp)
 	{
 		const std::uint8_t id = kv.first;
@@ -214,12 +262,42 @@ bool MultiplayerGameState::Update(sf::Time dt)
 
 		m_world.UpdateNetworkActorState(id, st.current, st.hp, st.ammo);
 	}
+	m_perf.interp_time_total += interp_timer.getElapsedTime();
 
 	if (GetContext().network && m_state_send_timer > sf::seconds(5.f) && !GetContext().network->IsClientConnected())
 	{
 		RequestStackClear();
 		RequestStackPush(StateID::kMenu);
 		return false;
+	}
+
+    m_perf.update_time_total += update_timer.getElapsedTime();
+
+	if (m_perf.sample_window >= sf::seconds(1.f))
+	{
+		const float sample_secs = m_perf.sample_window.asSeconds();
+		const float fps = (sample_secs > 0.f) ? static_cast<float>(m_perf.frames) / sample_secs : 0.f;
+
+		auto avg_ms = [frames = m_perf.frames](sf::Time t) -> float
+			{
+				return (frames > 0) ? (t.asMicroseconds() / 1000.f) / static_cast<float>(frames) : 0.f;
+			};
+
+		std::cout
+			<< "[MP PERF] fps=" << fps
+			<< " rx=" << m_perf.rx_packets << "pkts/" << m_perf.rx_bytes << "B"
+			<< " tx=" << m_perf.tx_packets << "pkts/" << m_perf.tx_bytes << "B"
+			<< " snapshots=" << m_perf.snapshot_packets << " actors=" << m_perf.snapshot_actors
+			<< " capHits=" << m_perf.poll_cap_hits
+			<< " remote(+" << m_perf.remote_connects << ",-" << m_perf.remote_disconnects << ")"
+			<< " t_ms{update=" << avg_ms(m_perf.update_time_total)
+			<< ",net=" << avg_ms(m_perf.net_poll_time_total)
+			<< ",world=" << avg_ms(m_perf.world_update_time_total)
+			<< ",snapshot=" << avg_ms(m_perf.snapshot_apply_time_total)
+			<< ",interp=" << avg_ms(m_perf.interp_time_total)
+			<< "}\n";
+
+		m_perf = PerfCounters{};
 	}
 
 	return true;
@@ -252,11 +330,16 @@ void MultiplayerGameState::PollNetworkGameplay()
 	//Prevent frame starvation if socket backlog is large
 	const int kMaxPacketsPerFrame = 64;
 
-	for (int i = 0; i < kMaxPacketsPerFrame; ++i)
+   for (int i = 0; i < kMaxPacketsPerFrame; ++i)
 	{
 		sf::Packet p;
 		if (!GetContext().network->PollGameplayPacket(p))
 			break;
+
+		++m_perf.rx_packets;
+		m_perf.rx_bytes += p.getDataSize();
+		if (i == kMaxPacketsPerFrame - 1)
+			++m_perf.poll_cap_hits;
 
 		HandleServerPacket(p);
 	}
@@ -350,6 +433,8 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 		m_latest_world_scroll = worldScroll;
 		m_latest_snapshot.clear();
 		m_latest_snapshot.reserve(count);
+		++m_perf.snapshot_packets;
+		m_perf.snapshot_actors += count;
 
 		for (std::uint8_t i = 0; i < count; ++i)
 		{
@@ -402,6 +487,7 @@ void MultiplayerGameState::OnRemotePlayerConnected(std::uint8_t networkId, float
 		return;
 
 	m_known_remote_network_ids.insert(networkId);
+    ++m_perf.remote_connects;
 	m_world.SpawnNetworkActor(networkId, { x, y }, sf::Color::Cyan);
 
 	std::cout << "[MP] Remote player connected: id=" << static_cast<int>(networkId)
@@ -414,6 +500,7 @@ void MultiplayerGameState::OnRemotePlayerDisconnected(std::uint8_t networkId)
 		return;
 
 	m_known_remote_network_ids.erase(networkId);
+  ++m_perf.remote_disconnects;
 	m_world.RemoveNetworkActor(networkId);
 	m_remote_interp.erase(networkId);
 
