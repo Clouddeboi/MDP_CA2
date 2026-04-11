@@ -71,7 +71,8 @@ World::World(sf::RenderTarget& output_target, FontHolder& font, SoundPlayer& sou
 
 	if (!m_preloaded_levels.empty())
 	{
-		m_current_level_index = static_cast<std::size_t>(std::rand() % m_preloaded_levels.size());
+		//m_current_level_index = static_cast<std::size_t>(std::rand() % m_preloaded_levels.size());
+		m_current_level_index = 0;
 		ApplyPreloadedLevel(m_current_level_index);
 		LoadSpawnPositionsFromLevel();
 	}
@@ -1905,21 +1906,15 @@ void World::UpdateNetworkActorState(std::uint8_t networkId, const sf::Vector2f& 
 
 	Aircraft* actor = it->second;
 	if (!actor)
+	{
+		m_network_actors.erase(it);
 		return;
+	}
 
+	//Position-only sync here (safer). Avoid Damage/Repair to prevent destroy/removal races.
 	actor->setPosition(position);
 
-	const int currentHp = actor->GetHitPoints();
-	if (hp < static_cast<std::uint8_t>(currentHp))
-	{
-		actor->Damage(currentHp - static_cast<int>(hp));
-	}
-	else if (hp > static_cast<std::uint8_t>(currentHp))
-	{
-		actor->Repair(static_cast<int>(hp) - currentHp);
-	}
-
-	//Ammo sync API not exposed directly yet
+	(void)hp;
 	(void)ammo;
 }
 

@@ -64,12 +64,32 @@ bool MultiplayerGameState::Update(sf::Time dt)
 	{
 		for (const auto& s : m_latest_snapshot)
 		{
-			//Remote actor path
-			if (!IsKnownLocalNetworkId(s.id))
+			//Local known actor path
+			if (IsKnownLocalNetworkId(s.id))
 			{
-				m_known_remote_network_ids.insert(s.id);
-				m_world.SpawnNetworkActor(s.id, { s.x, s.y }, sf::Color::Cyan);
+				auto it = m_net_to_local_player_index.find(s.id);
+				if (it == m_net_to_local_player_index.end())
+					continue;
 
+				const int playerIdx = it->second;
+				Aircraft* a = m_world.GetPlayerAircraft(playerIdx);
+				if (!a)
+					continue;
+
+				a->setPosition({ s.x, s.y });
+
+				const int currentHp = a->GetHitPoints();
+				if (s.hp < static_cast<std::uint8_t>(currentHp))
+					a->Damage(currentHp - static_cast<int>(s.hp));
+				else if (s.hp > static_cast<std::uint8_t>(currentHp))
+					a->Repair(static_cast<int>(s.hp) - currentHp);
+
+				continue;
+			}
+
+			//Remote known actor path (MUST already be known from connect/spawn event)
+			if (m_known_remote_network_ids.find(s.id) != m_known_remote_network_ids.end())
+			{
 				auto& interp = m_remote_interp[s.id];
 				if (!interp.initialized)
 				{
@@ -85,30 +105,6 @@ bool MultiplayerGameState::Update(sf::Time dt)
 					interp.hp = s.hp;
 					interp.ammo = s.ammo;
 				}
-
-				continue;
-			}
-
-			//Local known actor path
-			auto it = m_net_to_local_player_index.find(s.id);
-			if (it == m_net_to_local_player_index.end())
-				continue;
-
-			const int playerIdx = it->second;
-			Aircraft* a = m_world.GetPlayerAircraft(playerIdx);
-			if (!a)
-				continue;
-
-			a->setPosition({ s.x, s.y });
-
-			const int currentHp = a->GetHitPoints();
-			if (s.hp < static_cast<std::uint8_t>(currentHp))
-			{
-				a->Damage(currentHp - static_cast<int>(s.hp));
-			}
-			else if (s.hp > static_cast<std::uint8_t>(currentHp))
-			{
-				a->Repair(static_cast<int>(s.hp) - currentHp);
 			}
 		}
 
