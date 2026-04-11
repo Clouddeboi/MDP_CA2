@@ -55,7 +55,7 @@ private:
 	std::unordered_map<int, std::uint8_t> m_local_player_to_aircraft_id;
 
 	sf::Time m_state_send_timer = sf::Time::Zero;
-	sf::Time m_state_send_interval = sf::milliseconds(50);//20Hz
+	sf::Time m_state_send_interval = sf::milliseconds(100);//10Hz
 
 	std::unordered_map<std::uint8_t, RemoteInterpState> m_remote_interp;
 };

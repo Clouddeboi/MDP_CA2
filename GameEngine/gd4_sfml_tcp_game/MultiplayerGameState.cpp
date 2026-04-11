@@ -11,7 +11,12 @@
 
 MultiplayerGameState::MultiplayerGameState(StateStack& stack, Context context)
 	: State(stack, context)
-	, m_world(*context.window, *context.fonts, *context.sounds, PlayerBindingConfig::GetInstance().GetPlayerCount())
+	, m_world(
+		*context.window,
+		*context.fonts,
+		*context.sounds,
+		(context.network&& context.network->IsActive()) ? 1 : PlayerBindingConfig::GetInstance().GetPlayerCount()
+	)
 	, m_players()
 	, m_sounds(*context.sounds)
 {
@@ -19,7 +24,11 @@ MultiplayerGameState::MultiplayerGameState(StateStack& stack, Context context)
 	context.music->Play(MusicThemes::kMissionTheme);
 
 	auto& config = PlayerBindingConfig::GetInstance();
-	int player_count = std::max(1, std::min(config.GetPlayerCount(), PlayerBindingConfig::GetMaxPlayers()));
+
+	//In network gameplay, this machine controls one local player by default.
+	int player_count = (context.network && context.network->IsActive())
+		? 1
+		: std::max(1, std::min(config.GetPlayerCount(), PlayerBindingConfig::GetMaxPlayers()));
 
 	for (int i = 0; i < player_count; ++i)
 	{
@@ -29,13 +38,9 @@ MultiplayerGameState::MultiplayerGameState(StateStack& stack, Context context)
 		if (device.has_value())
 		{
 			if (device->type == InputDeviceType::kController)
-			{
 				m_players[i].SetJoystickId(device->deviceIndex);
-			}
 			else
-			{
 				m_players[i].SetJoystickId(-1);
-			}
 		}
 		else
 		{
@@ -241,10 +246,13 @@ bool MultiplayerGameState::HandleEvent(const sf::Event& event)
 
 void MultiplayerGameState::PollNetworkGameplay()
 {
-	if (!GetContext().network)
+	if (!GetContext().network || !GetContext().network->IsClientConnected())
 		return;
 
-	while (true)
+	//Prevent frame starvation if socket backlog is large
+	const int kMaxPacketsPerFrame = 64;
+
+	for (int i = 0; i < kMaxPacketsPerFrame; ++i)
 	{
 		sf::Packet p;
 		if (!GetContext().network->PollGameplayPacket(p))
