@@ -17,6 +17,7 @@
 #include "LevelManager.hpp"
 
 #include <array>
+#include <unordered_map>
 
 class World 
 {
@@ -53,6 +54,10 @@ public:
 	void ClearLevel();
 	LevelData& GetCurrentLevelData();
 	const LevelData& GetCurrentLevelData() const;
+
+	void SpawnNetworkActor(std::uint8_t networkId, const sf::Vector2f& position, const sf::Color& tint = sf::Color::Cyan);
+	void UpdateNetworkActorState(std::uint8_t networkId, const sf::Vector2f& position, std::uint8_t hp, std::uint8_t ammo);
+	void RemoveNetworkActor(std::uint8_t networkId);
 
 private:
 	void LoadTextures();
@@ -200,5 +205,7 @@ private:
 	std::vector<LevelData> m_preloaded_levels;
 	std::vector<std::string> m_preloaded_level_paths;
 	std::size_t m_current_level_index = 0;
+
+	std::unordered_map<std::uint8_t, Aircraft*> m_network_actors;
 };
 

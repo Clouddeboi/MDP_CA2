@@ -68,6 +68,8 @@ bool MultiplayerGameState::Update(sf::Time dt)
 			if (!IsKnownLocalNetworkId(s.id))
 			{
 				m_known_remote_network_ids.insert(s.id);
+				m_world.SpawnNetworkActor(s.id, { s.x, s.y }, sf::Color::Cyan);
+				m_world.UpdateNetworkActorState(s.id, { s.x, s.y }, s.hp, s.ammo);
 				continue;
 			}
 
@@ -255,6 +257,7 @@ void MultiplayerGameState::OnRemotePlayerConnected(std::uint8_t networkId, float
 		return;
 
 	m_known_remote_network_ids.insert(networkId);
+	m_world.SpawnNetworkActor(networkId, { x, y }, sf::Color::Cyan);
 
 	std::cout << "[MP] Remote player connected: id=" << static_cast<int>(networkId)
 		<< " pos=(" << x << ", " << y << ")\n";
@@ -266,6 +269,7 @@ void MultiplayerGameState::OnRemotePlayerDisconnected(std::uint8_t networkId)
 		return;
 
 	m_known_remote_network_ids.erase(networkId);
+	m_world.RemoveNetworkActor(networkId);
 
 	std::cout << "[MP] Remote player disconnected: id=" << static_cast<int>(networkId) << "\n";
 }

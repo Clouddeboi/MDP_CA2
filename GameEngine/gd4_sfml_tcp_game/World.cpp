@@ -1879,6 +1879,64 @@ Aircraft* World::GetPlayerAircraft(int player_index)
 	return nullptr;
 }
 
+void World::SpawnNetworkActor(std::uint8_t networkId, const sf::Vector2f& position, const sf::Color& tint)
+{
+	if (m_network_actors.find(networkId) != m_network_actors.end())
+		return;
+
+	//Remote actor is visual/sync driven
+	std::unique_ptr<Aircraft> actor(new Aircraft(AircraftType::kEagle, m_textures, m_fonts, -1));
+	Aircraft* actorPtr = actor.get();
+
+	actorPtr->SetPlayerColor(tint);
+	actorPtr->setPosition(position);
+	actorPtr->SetUsePhysics(false);
+	actorPtr->SetVelocity(0.f, 0.f);
+
+	m_scene_layers[static_cast<int>(SceneLayers::kUpperAir)]->AttachChild(std::move(actor));
+	m_network_actors[networkId] = actorPtr;
+}
+
+void World::UpdateNetworkActorState(std::uint8_t networkId, const sf::Vector2f& position, std::uint8_t hp, std::uint8_t ammo)
+{
+	auto it = m_network_actors.find(networkId);
+	if (it == m_network_actors.end())
+		return;
+
+	Aircraft* actor = it->second;
+	if (!actor)
+		return;
+
+	actor->setPosition(position);
+
+	const int currentHp = actor->GetHitPoints();
+	if (hp < static_cast<std::uint8_t>(currentHp))
+	{
+		actor->Damage(currentHp - static_cast<int>(hp));
+	}
+	else if (hp > static_cast<std::uint8_t>(currentHp))
+	{
+		actor->Repair(static_cast<int>(hp) - currentHp);
+	}
+
+	//Ammo sync API not exposed directly yet
+	(void)ammo;
+}
+
+void World::RemoveNetworkActor(std::uint8_t networkId)
+{
+	auto it = m_network_actors.find(networkId);
+	if (it == m_network_actors.end())
+		return;
+
+	if (it->second)
+	{
+		it->second->Destroy();
+	}
+
+	m_network_actors.erase(it);
+}
+
 void World::UpdateSounds()
 {
 	// Set listener's position to first player's position (or could be average of all players)
