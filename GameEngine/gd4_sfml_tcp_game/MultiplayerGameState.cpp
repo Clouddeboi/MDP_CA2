@@ -133,7 +133,40 @@ bool MultiplayerGameState::Update(sf::Time dt)
 	{
 		sf::Packet p;
 		p << static_cast<std::uint8_t>(Client::PacketType::kStateUpdate);
-		p << static_cast<std::uint8_t>(0);
+
+		std::uint8_t num_local_aircraft = 0;
+
+		//First pass: count
+		for (size_t i = 0; i < m_players.size(); ++i)
+		{
+			Aircraft* a = m_world.GetPlayerAircraft(static_cast<int>(i));
+			if (a)
+			{
+				++num_local_aircraft;
+			}
+		}
+
+		p << num_local_aircraft;
+
+		//Second pass: payload for each local aircraft
+		for (size_t i = 0; i < m_players.size(); ++i)
+		{
+			Aircraft* a = m_world.GetPlayerAircraft(static_cast<int>(i));
+			if (!a)
+				continue;
+
+			//Current convention: player/network id uses local player index for now
+			const std::uint8_t aircraft_identifier = static_cast<std::uint8_t>(i);
+			const sf::Vector2f pos = a->getPosition();
+			const std::uint8_t hp = static_cast<std::uint8_t>(std::max(0, std::min(255, a->GetHitPoints())));
+			const std::uint8_t ammo = 0; //placeholder until ammo getter is exposed
+
+			p << aircraft_identifier
+				<< pos.x
+				<< pos.y
+				<< hp
+				<< ammo;
+		}
 
 		GetContext().network->SendGameplayPacket(p);
 	}
