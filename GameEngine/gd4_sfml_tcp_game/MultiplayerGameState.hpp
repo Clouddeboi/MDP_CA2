@@ -18,6 +18,19 @@ private:
 	void PollNetworkGameplay();
 	void HandleServerPacket(sf::Packet& packet);
 
+	struct NetActorState
+	{
+		std::uint8_t id = 0;
+		float x = 0.f;
+		float y = 0.f;
+		std::uint8_t hp = 0;
+		std::uint8_t ammo = 0;
+	};
+
+	float m_latest_world_scroll = 0.f;
+	std::vector<NetActorState> m_latest_snapshot;
+	bool m_has_new_snapshot = false;
+
 	World m_world;
 	std::vector<Player> m_players;
 	SoundPlayer& m_sounds;

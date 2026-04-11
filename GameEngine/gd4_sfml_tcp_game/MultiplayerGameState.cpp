@@ -6,6 +6,7 @@
 #include "NetworkSession.hpp"
 #include <iostream>
 #include <algorithm>
+#include <cstdint>
 
 MultiplayerGameState::MultiplayerGameState(StateStack& stack, Context context)
 	: State(stack, context)
@@ -55,6 +56,32 @@ bool MultiplayerGameState::Update(sf::Time dt)
 	}
 
 	m_world.Update(dt);
+
+	if (m_has_new_snapshot)
+	{
+		//Map snapshot entries to local player aircraft by player id index
+		for (const auto& s : m_latest_snapshot)
+		{
+			const int playerIdx = static_cast<int>(s.id);
+			Aircraft* a = m_world.GetPlayerAircraft(playerIdx);
+			if (!a)
+				continue;
+
+			a->setPosition({ s.x, s.y });
+
+			const int currentHp = a->GetHitPoints();
+			if (s.hp < static_cast<std::uint8_t>(currentHp))
+			{
+				a->Damage(currentHp - static_cast<int>(s.hp));
+			}
+			else if (s.hp > static_cast<std::uint8_t>(currentHp))
+			{
+				a->Repair(static_cast<int>(s.hp) - currentHp);
+			}
+		}
+
+		m_has_new_snapshot = false;
+	}
 
 	if (m_world.ShouldReturnToMenu())
 	{
@@ -163,14 +190,18 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 		std::uint8_t count = 0;
 		packet >> worldScroll >> count;
 
+		m_latest_world_scroll = worldScroll;
+		m_latest_snapshot.clear();
+		m_latest_snapshot.reserve(count);
+
 		for (std::uint8_t i = 0; i < count; ++i)
 		{
-			std::uint8_t id = 0;
-			float x = 0.f, y = 0.f;
-			std::uint8_t hp = 0;
-			std::uint8_t ammo = 0;
-			packet >> id >> x >> y >> hp >> ammo;
+			NetActorState s;
+			packet >> s.id >> s.x >> s.y >> s.hp >> s.ammo;
+			m_latest_snapshot.push_back(s);
 		}
+
+		m_has_new_snapshot = true;
 	}
 	break;
 
