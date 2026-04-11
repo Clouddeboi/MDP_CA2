@@ -64,6 +64,13 @@ bool MultiplayerGameState::Update(sf::Time dt)
 		//Apply only mapped/known local players for now
 		for (const auto& s : m_latest_snapshot)
 		{
+			//If not mapped to a local player, keep as known remote actor
+			if (!IsKnownLocalNetworkId(s.id))
+			{
+				m_known_remote_network_ids.insert(s.id);
+				continue;
+			}
+
 			auto it = m_net_to_local_player_index.find(s.id);
 			if (it == m_net_to_local_player_index.end())
 				continue;
@@ -180,6 +187,8 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 		std::uint8_t aircraftId = 0;
 		float x = 0.f, y = 0.f;
 		packet >> aircraftId >> x >> y;
+
+		OnRemotePlayerConnected(aircraftId, x, y);
 	}
 	break;
 
@@ -187,6 +196,8 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 	{
 		std::uint8_t aircraftId = 0;
 		packet >> aircraftId;
+
+		OnRemotePlayerDisconnected(aircraftId);
 	}
 	break;
 
@@ -231,4 +242,30 @@ void MultiplayerGameState::RebuildNetworkPlayerMap()
 	{
 		m_net_to_local_player_index[static_cast<std::uint8_t>(i)] = i;
 	}
+}
+
+bool MultiplayerGameState::IsKnownLocalNetworkId(std::uint8_t networkId) const
+{
+	return m_net_to_local_player_index.find(networkId) != m_net_to_local_player_index.end();
+}
+
+void MultiplayerGameState::OnRemotePlayerConnected(std::uint8_t networkId, float x, float y)
+{
+	if (IsKnownLocalNetworkId(networkId))
+		return;
+
+	m_known_remote_network_ids.insert(networkId);
+
+	std::cout << "[MP] Remote player connected: id=" << static_cast<int>(networkId)
+		<< " pos=(" << x << ", " << y << ")\n";
+}
+
+void MultiplayerGameState::OnRemotePlayerDisconnected(std::uint8_t networkId)
+{
+	if (IsKnownLocalNetworkId(networkId))
+		return;
+
+	m_known_remote_network_ids.erase(networkId);
+
+	std::cout << "[MP] Remote player disconnected: id=" << static_cast<int>(networkId) << "\n";
 }

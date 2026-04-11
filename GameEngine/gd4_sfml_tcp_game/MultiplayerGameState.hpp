@@ -5,6 +5,7 @@
 #include "SoundPlayer.hpp"
 #include <vector>
 #include <unordered_map>
+#include <unordered_set>
 #include <SFML/Network/Packet.hpp>
 
 class MultiplayerGameState : public State
@@ -19,6 +20,9 @@ private:
 	void PollNetworkGameplay();
 	void HandleServerPacket(sf::Packet& packet);
 	void RebuildNetworkPlayerMap();
+	void OnRemotePlayerConnected(std::uint8_t networkId, float x, float y);
+	void OnRemotePlayerDisconnected(std::uint8_t networkId);
+	bool IsKnownLocalNetworkId(std::uint8_t networkId) const;
 
 	struct NetActorState
 	{
@@ -38,4 +42,5 @@ private:
 	SoundPlayer& m_sounds;
 
 	std::unordered_map<std::uint8_t, int> m_net_to_local_player_index;
+	std::unordered_set<std::uint8_t> m_known_remote_network_ids;
 };
