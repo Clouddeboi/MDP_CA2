@@ -432,3 +432,33 @@ bool NetworkSession::ConsumeAssignedLocalPlayerIndex(int& playerIndex)
 	m_pending_assigned_local_player_index = -1;
 	return true;
 }
+
+bool NetworkSession::PollGameplayPacket(sf::Packet& outPacket)
+{
+	if (m_mode != NetworkMode::kClient || !m_client_socket || !m_client_connected)
+		return false;
+
+	m_client_socket->setBlocking(false);
+	const auto status = m_client_socket->receive(outPacket);
+
+	if (status == sf::Socket::Status::Done)
+		return true;
+
+	if (status == sf::Socket::Status::Disconnected)
+	{
+		m_client_connected = false;
+	}
+
+	return false;
+}
+
+void NetworkSession::SendGameplayPacket(sf::Packet& packet)
+{
+	if (m_mode == NetworkMode::kClient && m_client_socket && m_client_connected)
+	{
+		m_client_socket->setBlocking(true);
+		(void)m_client_socket->send(packet);
+		m_client_socket->setBlocking(false);
+		return;
+	}
+}

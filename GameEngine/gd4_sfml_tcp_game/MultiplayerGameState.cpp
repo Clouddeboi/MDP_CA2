@@ -2,6 +2,8 @@
 #include "MissionStatus.hpp"
 #include "InputDevice.hpp"
 #include "PlayerBindingConfig.hpp"
+#include "NetworkProtocol.hpp"
+#include "NetworkSession.hpp"
 #include <iostream>
 #include <algorithm>
 
@@ -47,6 +49,11 @@ void MultiplayerGameState::Draw()
 
 bool MultiplayerGameState::Update(sf::Time dt)
 {
+	if (GetContext().network && GetContext().network->IsClient())
+	{
+		PollNetworkGameplay();
+	}
+
 	m_world.Update(dt);
 
 	if (m_world.ShouldReturnToMenu())
@@ -80,6 +87,14 @@ bool MultiplayerGameState::Update(sf::Time dt)
 			}
 		}
 	}
+	if (GetContext().network && GetContext().network->IsClient())
+	{
+		sf::Packet p;
+		p << static_cast<std::uint8_t>(Client::PacketType::kStateUpdate);
+		p << static_cast<std::uint8_t>(0);
+
+		GetContext().network->SendGameplayPacket(p);
+	}
 
 	return true;
 }
@@ -101,4 +116,71 @@ bool MultiplayerGameState::HandleEvent(const sf::Event& event)
 	}
 
 	return true;
+}
+
+void MultiplayerGameState::PollNetworkGameplay()
+{
+	if (!GetContext().network)
+		return;
+
+	while (true)
+	{
+		sf::Packet p;
+		if (!GetContext().network->PollGameplayPacket(p))
+			break;
+
+		HandleServerPacket(p);
+	}
+}
+
+void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
+{
+	std::uint8_t type = 0;
+	packet >> type;
+
+	const auto packetType = static_cast<Server::PacketType>(type);
+
+	switch (packetType)
+	{
+	case Server::PacketType::kPlayerConnect:
+	{
+		std::uint8_t aircraftId = 0;
+		float x = 0.f, y = 0.f;
+		packet >> aircraftId >> x >> y;
+	}
+	break;
+
+	case Server::PacketType::kPlayerDisconnect:
+	{
+		std::uint8_t aircraftId = 0;
+		packet >> aircraftId;
+	}
+	break;
+
+	case Server::PacketType::kUpdateClientState:
+	{
+		float worldScroll = 0.f;
+		std::uint8_t count = 0;
+		packet >> worldScroll >> count;
+
+		for (std::uint8_t i = 0; i < count; ++i)
+		{
+			std::uint8_t id = 0;
+			float x = 0.f, y = 0.f;
+			std::uint8_t hp = 0;
+			std::uint8_t ammo = 0;
+			packet >> id >> x >> y >> hp >> ammo;
+		}
+	}
+	break;
+
+	case Server::PacketType::kSpawnEnemy:
+	case Server::PacketType::kSpawnPickup:
+	case Server::PacketType::kSpawnSelf:
+	case Server::PacketType::kPlayerEvent:
+	case Server::PacketType::kPlayerRealtimeChange:
+	case Server::PacketType::kMissionSuccess:
+	default:
+		break;
+	}
 }

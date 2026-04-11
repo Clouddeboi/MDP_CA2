@@ -7,6 +7,7 @@
 #include <tuple>
 #include <deque>
 #include <cstdint>
+#include <SFML/Network/Packet.hpp>
 
 namespace sf
 {
@@ -66,6 +67,9 @@ public:
 
 	void HostBroadcastLobbyBindingState(int playerIndex, int colorIndex, bool ready);
 	bool ConsumeAssignedLocalPlayerIndex(int& playerIndex);
+
+	bool PollGameplayPacket(sf::Packet& outPacket);
+	void SendGameplayPacket(sf::Packet& packet);
 
 	const std::string& GetLastError() const;
 
