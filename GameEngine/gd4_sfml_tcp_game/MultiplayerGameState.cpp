@@ -15,7 +15,7 @@ MultiplayerGameState::MultiplayerGameState(StateStack& stack, Context context)
 		*context.window,
 		*context.fonts,
 		*context.sounds,
-		(context.network&& context.network->IsActive()) ? 1 : PlayerBindingConfig::GetInstance().GetPlayerCount()
+		std::max(2, PlayerBindingConfig::GetInstance().GetPlayerCount())
 	)
 	, m_players()
 	, m_sounds(*context.sounds)

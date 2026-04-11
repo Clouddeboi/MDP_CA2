@@ -323,6 +323,9 @@ void World::UpdateCameraZoom(sf::Time dt)
 
 void World::CheckRoundEnd()
 {
+	if (m_player_aircrafts.size() < 2)
+		return;
+
 	if (m_round_over)
 		return;
 
