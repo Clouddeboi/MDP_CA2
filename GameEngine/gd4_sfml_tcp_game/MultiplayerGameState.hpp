@@ -43,4 +43,5 @@ private:
 
 	std::unordered_map<std::uint8_t, int> m_net_to_local_player_index;
 	std::unordered_set<std::uint8_t> m_known_remote_network_ids;
+	std::unordered_map<int, std::uint8_t> m_local_player_to_aircraft_id;
 };

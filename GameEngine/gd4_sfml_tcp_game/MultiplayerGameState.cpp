@@ -155,8 +155,13 @@ bool MultiplayerGameState::Update(sf::Time dt)
 			if (!a)
 				continue;
 
-			//Current convention: player/network id uses local player index for now
-			const std::uint8_t aircraft_identifier = static_cast<std::uint8_t>(i);
+			std::uint8_t aircraft_identifier = static_cast<std::uint8_t>(i);
+			auto idIt = m_local_player_to_aircraft_id.find(static_cast<int>(i));
+			if (idIt != m_local_player_to_aircraft_id.end())
+			{
+				aircraft_identifier = idIt->second;
+			}
+
 			const sf::Vector2f pos = a->getPosition();
 			const std::uint8_t hp = static_cast<std::uint8_t>(std::max(0, std::min(255, a->GetHitPoints())));
 			const std::uint8_t ammo = 0; //placeholder until ammo getter is exposed
@@ -236,6 +241,22 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 	}
 	break;
 
+	case Server::PacketType::kSpawnSelf:
+	{
+		std::uint8_t aircraftId = 0;
+		float x = 0.f, y = 0.f;
+		packet >> aircraftId >> x >> y;
+
+		m_local_player_to_aircraft_id[0] = aircraftId;
+
+		Aircraft* a = m_world.GetPlayerAircraft(0);
+		if (a)
+		{
+			a->setPosition({ x, y });
+		}
+	}
+	break;
+
 	case Server::PacketType::kUpdateClientState:
 	{
 		float worldScroll = 0.f;
@@ -251,6 +272,13 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 			NetActorState s;
 			packet >> s.id >> s.x >> s.y >> s.hp >> s.ammo;
 			m_latest_snapshot.push_back(s);
+
+			//Keep authoritative local aircraft id mapping fresh when possible
+			auto localIt = m_net_to_local_player_index.find(s.id);
+			if (localIt != m_net_to_local_player_index.end())
+			{
+				m_local_player_to_aircraft_id[localIt->second] = s.id;
+			}
 		}
 
 		m_has_new_snapshot = true;
@@ -259,7 +287,6 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 
 	case Server::PacketType::kSpawnEnemy:
 	case Server::PacketType::kSpawnPickup:
-	case Server::PacketType::kSpawnSelf:
 	case Server::PacketType::kPlayerEvent:
 	case Server::PacketType::kPlayerRealtimeChange:
 	case Server::PacketType::kMissionSuccess:
@@ -276,6 +303,12 @@ void MultiplayerGameState::RebuildNetworkPlayerMap()
 	for (int i = 0; i < static_cast<int>(m_players.size()); ++i)
 	{
 		m_net_to_local_player_index[static_cast<std::uint8_t>(i)] = i;
+	}
+
+	m_local_player_to_aircraft_id.clear();
+	for (int i = 0; i < static_cast<int>(m_players.size()); ++i)
+	{
+		m_local_player_to_aircraft_id[i] = static_cast<std::uint8_t>(i);
 	}
 }
 
