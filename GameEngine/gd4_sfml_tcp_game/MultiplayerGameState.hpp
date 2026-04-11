@@ -4,6 +4,7 @@
 #include "Player.hpp"
 #include "SoundPlayer.hpp"
 #include <vector>
+#include <unordered_map>
 #include <SFML/Network/Packet.hpp>
 
 class MultiplayerGameState : public State
@@ -17,6 +18,7 @@ public:
 private:
 	void PollNetworkGameplay();
 	void HandleServerPacket(sf::Packet& packet);
+	void RebuildNetworkPlayerMap();
 
 	struct NetActorState
 	{
@@ -34,4 +36,6 @@ private:
 	World m_world;
 	std::vector<Player> m_players;
 	SoundPlayer& m_sounds;
+
+	std::unordered_map<std::uint8_t, int> m_net_to_local_player_index;
 };

@@ -41,6 +41,8 @@ MultiplayerGameState::MultiplayerGameState(StateStack& stack, Context context)
 			m_players[i].SetJoystickId(-1);
 		}
 	}
+
+	RebuildNetworkPlayerMap();
 }
 
 void MultiplayerGameState::Draw()
@@ -59,10 +61,14 @@ bool MultiplayerGameState::Update(sf::Time dt)
 
 	if (m_has_new_snapshot)
 	{
-		//Map snapshot entries to local player aircraft by player id index
+		//Apply only mapped/known local players for now
 		for (const auto& s : m_latest_snapshot)
 		{
-			const int playerIdx = static_cast<int>(s.id);
+			auto it = m_net_to_local_player_index.find(s.id);
+			if (it == m_net_to_local_player_index.end())
+				continue;
+
+			const int playerIdx = it->second;
 			Aircraft* a = m_world.GetPlayerAircraft(playerIdx);
 			if (!a)
 				continue;
@@ -213,5 +219,16 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 	case Server::PacketType::kMissionSuccess:
 	default:
 		break;
+	}
+}
+
+void MultiplayerGameState::RebuildNetworkPlayerMap()
+{
+	m_net_to_local_player_index.clear();
+
+	//Network id uses player index for locally instantiated players.
+	for (int i = 0; i < static_cast<int>(m_players.size()); ++i)
+	{
+		m_net_to_local_player_index[static_cast<std::uint8_t>(i)] = i;
 	}
 }
