@@ -136,9 +136,12 @@ bool MultiplayerGameState::Update(sf::Time dt)
 
 		std::uint8_t num_local_aircraft = 0;
 
-		//First pass: count
+		//First pass: count only local slots with authoritative aircraft id mapping
 		for (size_t i = 0; i < m_players.size(); ++i)
 		{
+			if (m_local_player_to_aircraft_id.find(static_cast<int>(i)) == m_local_player_to_aircraft_id.end())
+				continue;
+
 			Aircraft* a = m_world.GetPlayerAircraft(static_cast<int>(i));
 			if (a)
 			{
@@ -148,23 +151,21 @@ bool MultiplayerGameState::Update(sf::Time dt)
 
 		p << num_local_aircraft;
 
-		//Second pass: payload for each local aircraft
+		//Second pass: payload for each authoritative local aircraft
 		for (size_t i = 0; i < m_players.size(); ++i)
 		{
+			auto idIt = m_local_player_to_aircraft_id.find(static_cast<int>(i));
+			if (idIt == m_local_player_to_aircraft_id.end())
+				continue;
+
 			Aircraft* a = m_world.GetPlayerAircraft(static_cast<int>(i));
 			if (!a)
 				continue;
 
-			std::uint8_t aircraft_identifier = static_cast<std::uint8_t>(i);
-			auto idIt = m_local_player_to_aircraft_id.find(static_cast<int>(i));
-			if (idIt != m_local_player_to_aircraft_id.end())
-			{
-				aircraft_identifier = idIt->second;
-			}
-
+			const std::uint8_t aircraft_identifier = idIt->second;
 			const sf::Vector2f pos = a->getPosition();
 			const std::uint8_t hp = static_cast<std::uint8_t>(std::max(0, std::min(255, a->GetHitPoints())));
-			const std::uint8_t ammo = 0; //placeholder until ammo getter is exposed
+			const std::uint8_t ammo = 0;//Placeholder until ammo getter is exposed
 
 			p << aircraft_identifier
 				<< pos.x
@@ -237,6 +238,15 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 		std::uint8_t aircraftId = 0;
 		packet >> aircraftId;
 
+		//If it was considered local-owned, drop that ownership mapping
+		for (auto it = m_local_player_to_aircraft_id.begin(); it != m_local_player_to_aircraft_id.end();)
+		{
+			if (it->second == aircraftId)
+				it = m_local_player_to_aircraft_id.erase(it);
+			else
+				++it;
+		}
+
 		OnRemotePlayerDisconnected(aircraftId);
 	}
 	break;
@@ -247,9 +257,26 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 		float x = 0.f, y = 0.f;
 		packet >> aircraftId >> x >> y;
 
-		m_local_player_to_aircraft_id[0] = aircraftId;
+		//Assign this authoritative id to first unassigned local slot
+		int assignedLocalSlot = -1;
 
-		Aircraft* a = m_world.GetPlayerAircraft(0);
+		for (size_t i = 0; i < m_players.size(); ++i)
+		{
+			if (m_local_player_to_aircraft_id.find(static_cast<int>(i)) == m_local_player_to_aircraft_id.end())
+			{
+				assignedLocalSlot = static_cast<int>(i);
+				break;
+			}
+		}
+
+		//Fallback to slot 0 if all already mapped
+		if (assignedLocalSlot < 0)
+			assignedLocalSlot = 0;
+
+		m_local_player_to_aircraft_id[assignedLocalSlot] = aircraftId;
+		m_net_to_local_player_index[aircraftId] = assignedLocalSlot;
+
+		Aircraft* a = m_world.GetPlayerAircraft(assignedLocalSlot);
 		if (a)
 		{
 			a->setPosition({ x, y });
@@ -273,11 +300,14 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 			packet >> s.id >> s.x >> s.y >> s.hp >> s.ammo;
 			m_latest_snapshot.push_back(s);
 
-			//Keep authoritative local aircraft id mapping fresh when possible
-			auto localIt = m_net_to_local_player_index.find(s.id);
-			if (localIt != m_net_to_local_player_index.end())
+			//If this id belongs to any local-owned slot, keep reverse map fresh
+			for (const auto& kv : m_local_player_to_aircraft_id)
 			{
-				m_local_player_to_aircraft_id[localIt->second] = s.id;
+				if (kv.second == s.id)
+				{
+					m_net_to_local_player_index[s.id] = kv.first;
+					break;
+				}
 			}
 		}
 
@@ -299,17 +329,8 @@ void MultiplayerGameState::RebuildNetworkPlayerMap()
 {
 	m_net_to_local_player_index.clear();
 
-	//Network id uses player index for locally instantiated players.
-	for (int i = 0; i < static_cast<int>(m_players.size()); ++i)
-	{
-		m_net_to_local_player_index[static_cast<std::uint8_t>(i)] = i;
-	}
-
+	//Start with no authoritative ownership until kSpawnSelf packets arrive
 	m_local_player_to_aircraft_id.clear();
-	for (int i = 0; i < static_cast<int>(m_players.size()); ++i)
-	{
-		m_local_player_to_aircraft_id[i] = static_cast<std::uint8_t>(i);
-	}
 }
 
 bool MultiplayerGameState::IsKnownLocalNetworkId(std::uint8_t networkId) const
