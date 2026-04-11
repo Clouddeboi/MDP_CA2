@@ -214,6 +214,13 @@ bool MultiplayerGameState::Update(sf::Time dt)
 		m_world.UpdateNetworkActorState(id, st.current, st.hp, st.ammo);
 	}
 
+	if (GetContext().network && m_state_send_timer > sf::seconds(5.f) && !GetContext().network->IsClientConnected())
+	{
+		RequestStackClear();
+		RequestStackPush(StateID::kMenu);
+		return false;
+	}
+
 	return true;
 }
 
@@ -254,7 +261,8 @@ void MultiplayerGameState::PollNetworkGameplay()
 void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 {
 	std::uint8_t type = 0;
-	packet >> type;
+	if (!(packet >> type))
+		return;
 
 	const auto packetType = static_cast<Server::PacketType>(type);
 
@@ -264,7 +272,8 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 	{
 		std::uint8_t aircraftId = 0;
 		float x = 0.f, y = 0.f;
-		packet >> aircraftId >> x >> y;
+		if (!(packet >> aircraftId >> x >> y))
+			return;
 
 		OnRemotePlayerConnected(aircraftId, x, y);
 	}
@@ -273,7 +282,8 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 	case Server::PacketType::kPlayerDisconnect:
 	{
 		std::uint8_t aircraftId = 0;
-		packet >> aircraftId;
+		if (!(packet >> aircraftId))
+			return;
 
 		//If it was considered local-owned, drop that ownership mapping
 		for (auto it = m_local_player_to_aircraft_id.begin(); it != m_local_player_to_aircraft_id.end();)
@@ -292,7 +302,8 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 	{
 		std::uint8_t aircraftId = 0;
 		float x = 0.f, y = 0.f;
-		packet >> aircraftId >> x >> y;
+		if (!(packet >> aircraftId >> x >> y))
+			return;
 
 		//Assign this authoritative id to first unassigned local slot
 		int assignedLocalSlot = -1;
@@ -325,7 +336,12 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 	{
 		float worldScroll = 0.f;
 		std::uint8_t count = 0;
-		packet >> worldScroll >> count;
+		if (!(packet >> worldScroll >> count))
+			return;
+
+		//Sanity cap to avoid malformed/hostile packet blowing up client
+		if (count > 200)
+			return;
 
 		m_latest_world_scroll = worldScroll;
 		m_latest_snapshot.clear();
@@ -334,7 +350,9 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 		for (std::uint8_t i = 0; i < count; ++i)
 		{
 			NetActorState s;
-			packet >> s.id >> s.x >> s.y >> s.hp >> s.ammo;
+			if (!(packet >> s.id >> s.x >> s.y >> s.hp >> s.ammo))
+				return;
+
 			m_latest_snapshot.push_back(s);
 
 			//If this id belongs to any local-owned slot, keep reverse map fresh
@@ -361,7 +379,6 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 		break;
 	}
 }
-
 void MultiplayerGameState::RebuildNetworkPlayerMap()
 {
 	m_net_to_local_player_index.clear();
