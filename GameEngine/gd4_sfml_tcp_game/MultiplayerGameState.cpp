@@ -7,6 +7,7 @@
 #include <iostream>
 #include <algorithm>
 #include <cstdint>
+#include <cmath>
 
 MultiplayerGameState::MultiplayerGameState(StateStack& stack, Context context)
 	: State(stack, context)
@@ -61,18 +62,34 @@ bool MultiplayerGameState::Update(sf::Time dt)
 
 	if (m_has_new_snapshot)
 	{
-		//Apply only mapped/known local players for now
 		for (const auto& s : m_latest_snapshot)
 		{
-			//If not mapped to a local player, keep as known remote actor
+			//Remote actor path
 			if (!IsKnownLocalNetworkId(s.id))
 			{
 				m_known_remote_network_ids.insert(s.id);
 				m_world.SpawnNetworkActor(s.id, { s.x, s.y }, sf::Color::Cyan);
-				m_world.UpdateNetworkActorState(s.id, { s.x, s.y }, s.hp, s.ammo);
+
+				auto& interp = m_remote_interp[s.id];
+				if (!interp.initialized)
+				{
+					interp.current = { s.x, s.y };
+					interp.target = { s.x, s.y };
+					interp.hp = s.hp;
+					interp.ammo = s.ammo;
+					interp.initialized = true;
+				}
+				else
+				{
+					interp.target = { s.x, s.y };
+					interp.hp = s.hp;
+					interp.ammo = s.ammo;
+				}
+
 				continue;
 			}
 
+			//Local known actor path
 			auto it = m_net_to_local_player_index.find(s.id);
 			if (it == m_net_to_local_player_index.end())
 				continue;
@@ -129,8 +146,12 @@ bool MultiplayerGameState::Update(sf::Time dt)
 			}
 		}
 	}
-	if (GetContext().network && GetContext().network->IsClient())
+
+	m_state_send_timer += dt;
+	if (GetContext().network && GetContext().network->IsClient() && m_state_send_timer >= m_state_send_interval)
 	{
+		m_state_send_timer = sf::Time::Zero;
+
 		sf::Packet p;
 		p << static_cast<std::uint8_t>(Client::PacketType::kStateUpdate);
 
@@ -165,7 +186,7 @@ bool MultiplayerGameState::Update(sf::Time dt)
 			const std::uint8_t aircraft_identifier = idIt->second;
 			const sf::Vector2f pos = a->getPosition();
 			const std::uint8_t hp = static_cast<std::uint8_t>(std::max(0, std::min(255, a->GetHitPoints())));
-			const std::uint8_t ammo = 0;//Placeholder until ammo getter is exposed
+			const std::uint8_t ammo = 0;
 
 			p << aircraft_identifier
 				<< pos.x
@@ -357,6 +378,7 @@ void MultiplayerGameState::OnRemotePlayerDisconnected(std::uint8_t networkId)
 
 	m_known_remote_network_ids.erase(networkId);
 	m_world.RemoveNetworkActor(networkId);
+	m_remote_interp.erase(networkId);
 
 	std::cout << "[MP] Remote player disconnected: id=" << static_cast<int>(networkId) << "\n";
 }

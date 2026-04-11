@@ -33,6 +33,15 @@ private:
 		std::uint8_t ammo = 0;
 	};
 
+	struct RemoteInterpState
+	{
+		sf::Vector2f current{ 0.f, 0.f };
+		sf::Vector2f target{ 0.f, 0.f };
+		std::uint8_t hp = 0;
+		std::uint8_t ammo = 0;
+		bool initialized = false;
+	};
+
 	float m_latest_world_scroll = 0.f;
 	std::vector<NetActorState> m_latest_snapshot;
 	bool m_has_new_snapshot = false;
@@ -44,4 +53,9 @@ private:
 	std::unordered_map<std::uint8_t, int> m_net_to_local_player_index;
 	std::unordered_set<std::uint8_t> m_known_remote_network_ids;
 	std::unordered_map<int, std::uint8_t> m_local_player_to_aircraft_id;
+
+	sf::Time m_state_send_timer = sf::Time::Zero;
+	sf::Time m_state_send_interval = sf::milliseconds(50);//20Hz
+
+	std::unordered_map<std::uint8_t, RemoteInterpState> m_remote_interp;
 };
