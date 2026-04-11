@@ -78,25 +78,30 @@ bool MultiplayerGameState::Update(sf::Time dt)
      sf::Clock snapshot_timer;
 		for (const auto& s : m_latest_snapshot)
 		{
-			//Local known actor path
-			if (IsKnownLocalNetworkId(s.id))
+			//Unknown ids in snapshot are ignored unless already known remote players.
+			//This prevents enemy/projectile IDs being mis-created as player actors.
+			if (!IsKnownLocalNetworkId(s.id))
 			{
-				auto it = m_net_to_local_player_index.find(s.id);
-				if (it == m_net_to_local_player_index.end())
+				if (m_known_remote_network_ids.find(s.id) == m_known_remote_network_ids.end())
+				{
 					continue;
+				}
 
-				const int playerIdx = it->second;
-				Aircraft* a = m_world.GetPlayerAircraft(playerIdx);
-				if (!a)
-					continue;
-
-				a->setPosition({ s.x, s.y });
-
-				const int currentHp = a->GetHitPoints();
-				if (s.hp < static_cast<std::uint8_t>(currentHp))
-					a->Damage(currentHp - static_cast<int>(s.hp));
-				else if (s.hp > static_cast<std::uint8_t>(currentHp))
-					a->Repair(static_cast<int>(s.hp) - currentHp);
+				auto& interp = m_remote_interp[s.id];
+				if (!interp.initialized)
+				{
+					interp.current = { s.x, s.y };
+					interp.target = { s.x, s.y };
+					interp.hp = s.hp;
+					interp.ammo = s.ammo;
+					interp.initialized = true;
+				}
+				else
+				{
+					interp.target = { s.x, s.y };
+					interp.hp = s.hp;
+					interp.ammo = s.ammo;
+				}
 
 				continue;
 			}

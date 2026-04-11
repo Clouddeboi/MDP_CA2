@@ -575,11 +575,31 @@ void GameServer::UpdateClientState()
     sf::Packet update_client_state_packet;
     update_client_state_packet << static_cast<uint8_t>(Server::PacketType::kUpdateClientState);
     update_client_state_packet << static_cast<float>(m_battlefield_rect.position.y + m_battlefield_rect.size.y);
-    update_client_state_packet << static_cast<uint8_t>(m_aircraft_count);
 
-    for (const auto& aircraft : m_aircraft_info)
+    //Build a compact list of player-owned aircraft only (exclude enemies/projectiles)
+    std::vector<uint8_t> player_ids;
+    player_ids.reserve(m_connected_players + 1);
+
+    for (std::size_t i = 0; i < m_connected_players; ++i)
     {
-        update_client_state_packet << aircraft.first << aircraft.second.m_position.x << aircraft.second.m_position.y << aircraft.second.m_hitpoints << aircraft.second.m_missile_ammo;
+        if (!m_peers[i]->m_ready)
+            continue;
+
+        for (uint8_t id : m_peers[i]->m_aircraft_identifiers)
+        {
+            if (m_aircraft_info.find(id) != m_aircraft_info.end())
+            {
+                player_ids.push_back(id);
+            }
+        }
+    }
+
+    update_client_state_packet << static_cast<uint8_t>(player_ids.size());
+
+    for (uint8_t id : player_ids)
+    {
+        const auto& a = m_aircraft_info[id];
+        update_client_state_packet << id << a.m_position.x << a.m_position.y << a.m_hitpoints << a.m_missile_ammo;
     }
 
     SendToAll(update_client_state_packet);
