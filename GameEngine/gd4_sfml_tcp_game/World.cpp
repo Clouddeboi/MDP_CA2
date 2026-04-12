@@ -2473,9 +2473,10 @@ std::uint8_t World::GetLocalPlayerAnimState(int playerSlot) const
 	const Aircraft* a = m_player_aircrafts[playerSlot];
 	if (!a) return 0;
 
-	const sf::Vector2f vel = a->GetVelocity();
-	const bool facingRight = vel.x >= 0.f; // mirrors Aircraft::UpdateCurrent logic
-	const bool isRunning = std::abs(vel.x) > 10.f;
+	// Use the aircraft's stored facing direction — NOT velocity.
+	// vel.x is 0 when idle, which would wrongly reset facing to right every frame.
+	const bool facingRight = a->IsFacingRight();
+	const bool isRunning = std::abs(a->GetVelocity().x) > 10.f;
 
 	return static_cast<std::uint8_t>((facingRight ? 1u : 0u) | (isRunning ? 2u : 0u));
 }

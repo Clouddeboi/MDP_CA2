@@ -58,6 +58,8 @@ public:
 	void SetPlayerColor(const sf::Color& color);
 	sf::Color GetPlayerColor() const;
 
+	bool IsFacingRight() const;
+
 	void SetRemoteAnimState(std::uint8_t animFlags);
 
 private:

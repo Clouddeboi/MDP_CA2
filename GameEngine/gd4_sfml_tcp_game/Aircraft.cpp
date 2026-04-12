@@ -918,3 +918,8 @@ void Aircraft::SetRemoteAnimState(std::uint8_t animFlags)
 	else
 		m_current_animation->setScale({ -1.f, 1.f });
 }
+
+bool Aircraft::IsFacingRight() const
+{
+	return m_facing_right;
+}

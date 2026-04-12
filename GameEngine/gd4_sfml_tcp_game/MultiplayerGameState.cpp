@@ -122,6 +122,7 @@ bool MultiplayerGameState::Update(sf::Time dt)
 				interp.time_since_snap = sf::Time::Zero;
 				interp.hp = s.hp;
 				interp.ammo = s.ammo;
+				interp.anim = s.anim;
 				interp.initialized = true;
 			}
 			else
@@ -131,6 +132,7 @@ bool MultiplayerGameState::Update(sf::Time dt)
 				interp.time_since_snap = sf::Time::Zero;
 				interp.hp = s.hp;
 				interp.ammo = s.ammo;
+				interp.anim = s.anim;
 			}
 		}
 
