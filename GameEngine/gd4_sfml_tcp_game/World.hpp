@@ -112,6 +112,8 @@ private:
 	void AddPlatformColliderFromTile(const TileData& tile);
 	void AddPlatformVisualTilesFromTile(const TileData& tile);
 
+	void RebuildCollidablesList();
+
 private:
 	struct SpawnPoint
 	{
@@ -211,5 +213,7 @@ private:
 	std::unordered_map<std::uint8_t, Aircraft*> m_network_actors;
 
 	bool m_collision_enabled = true;
+
+	std::vector<SceneNode*> m_collidables;
 };
 

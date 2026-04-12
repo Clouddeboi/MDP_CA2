@@ -2,6 +2,7 @@
 
 #include <SFML/System/Vector2.hpp>
 #include <SFML/System/Time.hpp>
+#include <SFML/System/Clock.hpp>
 #include <memory>
 #include <string>
 #include <tuple>
@@ -93,4 +94,7 @@ private:
 
 	int m_pending_assigned_local_player_index = -1;
 	bool m_has_pending_assigned_local_player_index = false;
+
+	sf::Clock m_host_snapshot_clock;
+	static constexpr float kHostSnapshotIntervalMs = 50.f;
 };

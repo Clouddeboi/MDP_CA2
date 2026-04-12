@@ -137,4 +137,6 @@ private:
 
 	std::mutex m_host_event_mutex;
 	std::deque<HostEvent> m_host_events;
+
+	mutable std::mutex m_aircraft_mutex;
 };

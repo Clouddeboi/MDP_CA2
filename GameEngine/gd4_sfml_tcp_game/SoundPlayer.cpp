@@ -56,6 +56,16 @@ SoundPlayer::SoundPlayer()
 	sf::Listener::setDirection({ 0.f, 0.f, -1.f });
 }
 
+SoundPlayer::~SoundPlayer()
+{
+	//Stop all playing sounds before buffers are destroyed
+	for (auto& sound : m_sounds)
+	{
+		sound.stop();
+	}
+	m_sounds.clear();
+}
+
 void SoundPlayer::Play(SoundEffect effect)
 {
 	Play(effect, GetListenerPosition());

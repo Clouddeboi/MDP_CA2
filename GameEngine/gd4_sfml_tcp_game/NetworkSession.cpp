@@ -472,6 +472,11 @@ bool NetworkSession::PollGameplayPacket(sf::Packet& outPacket)
 			return true;
 		}
 
+		// Rate-limit: only synthesize state snapshot at ~20 Hz
+		if (m_host_snapshot_clock.getElapsedTime().asMilliseconds() < kHostSnapshotIntervalMs)
+			return false;
+		m_host_snapshot_clock.restart();
+
 		// Then synthesize kUpdateClientState from server state
 		std::vector<GameServer::NetAircraftState> states;
 		m_server->CopyAircraftStates(states);

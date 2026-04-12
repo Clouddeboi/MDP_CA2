@@ -241,3 +241,63 @@ float Distance(const SceneNode& lhs, const SceneNode& rhs)
 {
     return Utility::Length(lhs.GetWorldPosition() - rhs.GetWorldPosition());
 }
+
+void SceneNode::CollectCollidables(std::vector<SceneNode*>& out)
+{
+    unsigned int cat = GetCategory();
+    if (cat != static_cast<unsigned int>(ReceiverCategories::kNone) && !IsDestroyed())
+    {
+        out.push_back(this);
+    }
+    for (auto& child : m_children)  
+    {
+        child->CollectCollidables(out);
+    }
+}
+
+bool SceneNode::CanPotentiallyCollide(unsigned int a, unsigned int b)
+{
+    //Ignore static-static checks
+    if (IsStaticGeometry(a) && IsStaticGeometry(b))
+        return false;
+
+    //Player related
+    if ((HasCategory(a, ReceiverCategories::kPlayerAircraft) && HasCategory(b, ReceiverCategories::kEnemyAircraft)) ||
+        (HasCategory(b, ReceiverCategories::kPlayerAircraft) && HasCategory(a, ReceiverCategories::kEnemyAircraft)))
+        return true;
+
+    if ((HasCategory(a, ReceiverCategories::kPlayerAircraft) && HasCategory(b, ReceiverCategories::kPickup)) ||
+        (HasCategory(b, ReceiverCategories::kPlayerAircraft) && HasCategory(a, ReceiverCategories::kPickup)))
+        return true;
+
+    if ((HasCategory(a, ReceiverCategories::kPlayerAircraft) && HasCategory(b, ReceiverCategories::kProjectile)) ||
+        (HasCategory(b, ReceiverCategories::kPlayerAircraft) && HasCategory(a, ReceiverCategories::kProjectile)))
+        return true;
+
+    if ((HasCategory(a, ReceiverCategories::kPlayerAircraft) && HasCategory(b, ReceiverCategories::kPlatform)) ||
+        (HasCategory(b, ReceiverCategories::kPlayerAircraft) && HasCategory(a, ReceiverCategories::kPlatform)))
+        return true;
+
+    if ((HasCategory(a, ReceiverCategories::kPlayerAircraft) && HasCategory(b, ReceiverCategories::kBox)) ||
+        (HasCategory(b, ReceiverCategories::kPlayerAircraft) && HasCategory(a, ReceiverCategories::kBox)))
+        return true;
+
+    //Projectile related
+    if ((HasCategory(a, ReceiverCategories::kProjectile) && HasCategory(b, ReceiverCategories::kPlatform)) ||
+        (HasCategory(b, ReceiverCategories::kProjectile) && HasCategory(a, ReceiverCategories::kPlatform)))
+        return true;
+
+    if ((HasCategory(a, ReceiverCategories::kProjectile) && HasCategory(b, ReceiverCategories::kBox)) ||
+        (HasCategory(b, ReceiverCategories::kProjectile) && HasCategory(a, ReceiverCategories::kBox)))
+        return true;
+
+    if ((HasCategory(a, ReceiverCategories::kAlliedProjectile) && HasCategory(b, ReceiverCategories::kEnemyAircraft)) ||
+        (HasCategory(b, ReceiverCategories::kAlliedProjectile) && HasCategory(a, ReceiverCategories::kEnemyAircraft)))
+        return true;
+
+    if ((HasCategory(a, ReceiverCategories::kEnemyProjectile) && HasCategory(b, ReceiverCategories::kPlayerAircraft)) ||
+        (HasCategory(b, ReceiverCategories::kEnemyProjectile) && HasCategory(a, ReceiverCategories::kPlayerAircraft)))
+        return true;
+
+    return false;
+}

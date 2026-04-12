@@ -1441,10 +1441,40 @@ bool MatchesCategories(SceneNode::Pair& colliders, ReceiverCategories type1, Rec
 
 void World::HandleCollisions()
 {
-	std::set<SceneNode::Pair> collision_pairs;
-	m_scenegraph.CheckSceneCollision(m_scenegraph, collision_pairs);
+	//Rebuild flat list of collidable nodes (much smaller than full scene graph)
+	RebuildCollidablesList();
 
-	//Track grounded state per player
+	std::set<SceneNode::Pair> collision_pairs;
+	const std::size_t count = m_collidables.size();
+
+	for (std::size_t i = 0; i < count; ++i)
+	{
+		for (std::size_t j = i + 1; j < count; ++j)
+		{
+			SceneNode* a = m_collidables[i];
+			SceneNode* b = m_collidables[j];
+
+			if (a->IsDestroyed() || b->IsDestroyed())
+				continue;
+
+			unsigned int catA = a->GetCategory();
+			unsigned int catB = b->GetCategory();
+
+			if (catA == 0 || catB == 0)
+				continue;
+
+			// Use existing category filter
+			if (!SceneNode::CanPotentiallyCollide(catA, catB))
+				continue;
+
+			if (Collision(*a, *b))
+			{
+				collision_pairs.insert(std::minmax(a, b));
+			}
+		}
+	}
+
+	// Track grounded state per player
 	std::map<Aircraft*, bool> player_grounded_state;
 	for (Aircraft* player : m_player_aircrafts)
 	{
@@ -2173,4 +2203,10 @@ void World::AddPlatformVisualTilesFromTile(const TileData& tile)
 			m_scene_layers[static_cast<int>(SceneLayers::kUpperAir)]->AttachChild(std::move(sprite));
 		}
 	}
+}
+
+void World::RebuildCollidablesList()
+{
+	m_collidables.clear();
+	m_scenegraph.CollectCollidables(m_collidables);
 }

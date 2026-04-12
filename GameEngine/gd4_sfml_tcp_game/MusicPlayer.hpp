@@ -20,6 +20,7 @@ public:
 	void SetPaused(bool paused);
 	void SetVolume(float volume);
 
+	~MusicPlayer();
 
 private:
 	sf::Music m_music;

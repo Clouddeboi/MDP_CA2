@@ -340,6 +340,7 @@ void GameServer::HandleIncomingPackets(sf::Packet& packet, RemotePeer& receiving
         uint8_t num_aircraft;
         packet >> num_aircraft;
 
+        std::scoped_lock lock(m_aircraft_mutex);
         for (uint8_t i = 0; i < num_aircraft; ++i)
         {
             uint8_t aircraft_identifier;
@@ -612,6 +613,11 @@ void GameServer::UpdateClientState()
     p << static_cast<float>(m_battlefield_rect.position.y + m_battlefield_rect.size.y);
 
     std::vector<uint8_t> playerIds;
+
+    //Include host aircraft (ID 0) — it has no peer entry but must be synced
+    if (m_aircraft_info.find(0) != m_aircraft_info.end())
+        playerIds.push_back(0);
+
     for (std::size_t i = 0; i < m_connected_players; ++i)
     {
         if (!m_peers[i]->m_ready) continue;
@@ -786,6 +792,7 @@ int GameServer::FindFreeLobbyPlayerIndex() const
 
 void GameServer::CopyAircraftStates(std::vector<NetAircraftState>& outStates) const
 {
+    std::scoped_lock lock(m_aircraft_mutex);
     outStates.clear();
     for (const auto& kv : m_aircraft_info)
     {
@@ -800,6 +807,7 @@ void GameServer::CopyAircraftStates(std::vector<NetAircraftState>& outStates) co
 
 void GameServer::UpdateHostAircraftState(const sf::Vector2f& pos, uint8_t hp, uint8_t ammo)
 {
+    std::scoped_lock lock(m_aircraft_mutex);
     m_aircraft_info[0].m_position = pos;
     m_aircraft_info[0].m_hitpoints = hp;
     m_aircraft_info[0].m_missile_ammo = ammo;
