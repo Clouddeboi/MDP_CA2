@@ -301,7 +301,7 @@ bool MultiplayerGameState::Update(sf::Time dt)
 
 		// Predict where the remote player is RIGHT NOW using their last known velocity.
 		// Cap extrapolation at 150ms so a network stall doesn't send the ghost flying.
-		constexpr float kMaxExtrapolation = 0.15f;
+		constexpr float kMaxExtrapolation = 0.05f;
 		const float t = std::min(st.time_since_snap.asSeconds(), kMaxExtrapolation);
 		const sf::Vector2f deadReckoned = st.target + st.velocity * t;
 

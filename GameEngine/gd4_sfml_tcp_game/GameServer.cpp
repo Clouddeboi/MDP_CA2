@@ -105,7 +105,7 @@ void GameServer::ExecutionThread()
 
     sf::Time frame_rate = sf::seconds(1.f / 60.f);
     sf::Time frame_time = sf::Time::Zero;
-    sf::Time tick_rate = sf::seconds(1.f / 20.f);
+    sf::Time tick_rate = sf::seconds(1.f / 30.f);
     sf::Time tick_time = sf::Time::Zero;
     sf::Clock frame_clock, tick_clock;
 
@@ -135,7 +135,7 @@ void GameServer::ExecutionThread()
 
         //sleep to allow me to run the client on this machine as well
         //maybe rethink this if performance is poor
-        sf::sleep(sf::milliseconds(50));
+        sf::sleep(sf::milliseconds(1));
     }
 }
 

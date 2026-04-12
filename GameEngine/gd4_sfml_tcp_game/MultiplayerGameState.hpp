@@ -91,9 +91,9 @@ private:
 	std::unordered_map<int, std::uint8_t> m_local_player_to_aircraft_id;
 
 	sf::Time m_state_send_timer = sf::Time::Zero;
-	sf::Time m_state_send_interval = sf::milliseconds(100);//10Hz
+	sf::Time m_state_send_interval = sf::milliseconds(33);//30Hz
 	sf::Time m_state_force_send_timer = sf::Time::Zero;
-	sf::Time m_state_force_send_interval = sf::milliseconds(500);
+	sf::Time m_state_force_send_interval = sf::milliseconds(200);
 
 	PerfCounters m_perf;
 
