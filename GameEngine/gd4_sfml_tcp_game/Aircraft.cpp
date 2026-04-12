@@ -101,14 +101,22 @@ Aircraft::Aircraft(AircraftType type, const TextureHolder& textures, const FontH
 
 	if (m_player_id >= 0 || m_player_id == -1)
 	{
-		std::unique_ptr<EmitterNode> dust_emitter(new EmitterNode(ParticleType::kDust));
-		m_dust_emitter = dust_emitter.get();
-		m_dust_emitter->setPosition({ 0.f, 32.f });
-		m_dust_emitter->SetEmissionRate(15.f);
-		AttachChild(std::move(dust_emitter));
+		if (m_player_id >= 0)
+		{
+			// Dust emitter is only for locally controlled players — UpdateCurrent
+			// toggles emission inside an (m_player_id >= 0) block, so remote actors
+			// must NOT have one allocated here.
+			std::unique_ptr<EmitterNode> dust_emitter(new EmitterNode(ParticleType::kDust));
+			m_dust_emitter = dust_emitter.get();
+			m_dust_emitter->setPosition({ 0.f, 32.f });
+			m_dust_emitter->SetEmissionRate(15.f);
+			AttachChild(std::move(dust_emitter));
+		}
 
 		m_use_animations = true;
 
+		// Remote actors (m_player_id == -1) use player 2 animation texture as fallback;
+		// the host will always be slot 0 from the server's view but the client assigns -1.
 		TextureID anim_texture = (m_player_id == 0) ? TextureID::kPlayer1Animations : TextureID::kPlayer2Animations;
 
 		m_idle_animation.SetTexture(textures.Get(TextureID::kPlayerIdleAnimation));
