@@ -343,13 +343,16 @@ bool MultiplayerGameState::HandleEvent(const sf::Event& event)
 
 void MultiplayerGameState::PollNetworkGameplay()
 {
-	if (!GetContext().network || !GetContext().network->IsClientConnected())
+	if (!GetContext().network)
 		return;
 
-	//Prevent frame starvation if socket backlog is large
+	//Host has no client socket, but still needs synthesized packets from NetworkSession
+	if (!GetContext().network->IsHosting() && !GetContext().network->IsClientConnected())
+		return;
+
 	const int kMaxPacketsPerFrame = 64;
 
-   for (int i = 0; i < kMaxPacketsPerFrame; ++i)
+	for (int i = 0; i < kMaxPacketsPerFrame; ++i)
 	{
 		sf::Packet p;
 		if (!GetContext().network->PollGameplayPacket(p))

@@ -572,37 +572,29 @@ void GameServer::SendToAll(sf::Packet& packet)
 
 void GameServer::UpdateClientState()
 {
-    sf::Packet update_client_state_packet;
-    update_client_state_packet << static_cast<uint8_t>(Server::PacketType::kUpdateClientState);
-    update_client_state_packet << static_cast<float>(m_battlefield_rect.position.y + m_battlefield_rect.size.y);
+    sf::Packet p;
+    p << static_cast<uint8_t>(Server::PacketType::kUpdateClientState);
+    p << static_cast<float>(m_battlefield_rect.position.y + m_battlefield_rect.size.y);
 
-    //Build a compact list of player-owned aircraft only (exclude enemies/projectiles)
-    std::vector<uint8_t> player_ids;
-    player_ids.reserve(m_connected_players + 1);
-
+    std::vector<uint8_t> playerIds;
     for (std::size_t i = 0; i < m_connected_players; ++i)
     {
-        if (!m_peers[i]->m_ready)
-            continue;
-
+        if (!m_peers[i]->m_ready) continue;
         for (uint8_t id : m_peers[i]->m_aircraft_identifiers)
         {
             if (m_aircraft_info.find(id) != m_aircraft_info.end())
-            {
-                player_ids.push_back(id);
-            }
+                playerIds.push_back(id);
         }
     }
 
-    update_client_state_packet << static_cast<uint8_t>(player_ids.size());
-
-    for (uint8_t id : player_ids)
+    p << static_cast<uint8_t>(playerIds.size());
+    for (uint8_t id : playerIds)
     {
         const auto& a = m_aircraft_info[id];
-        update_client_state_packet << id << a.m_position.x << a.m_position.y << a.m_hitpoints << a.m_missile_ammo;
+        p << id << a.m_position.x << a.m_position.y << a.m_hitpoints << a.m_missile_ammo;
     }
 
-    SendToAll(update_client_state_packet);
+    SendToAll(p);
 }
 
 //It is essential to set the sockets to non-blocking - m_socket.setBlocking(false)
