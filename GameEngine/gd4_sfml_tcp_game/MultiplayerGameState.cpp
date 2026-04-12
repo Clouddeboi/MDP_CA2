@@ -511,6 +511,7 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 			if (a)
 			{
 				const sf::Vector2f pos = a->getPosition();
+				const sf::Vector2f vel = a->GetVelocity();
 				const std::uint8_t hp = static_cast<std::uint8_t>(
 					std::max(0, std::min(255, a->GetHitPoints())));
 				const std::uint8_t anim = m_world.GetLocalPlayerAnimState(0);
@@ -518,7 +519,7 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 				sf::Packet p;
 				p << static_cast<std::uint8_t>(Client::PacketType::kStateUpdate);
 				p << static_cast<std::uint8_t>(1);
-				p << aircraftId << pos.x << pos.y << hp
+				p << aircraftId << pos.x << pos.y << vel.x << vel.y << hp
 					<< static_cast<std::uint8_t>(0) << anim;
 				GetContext().network->SendGameplayPacket(p);
 			}

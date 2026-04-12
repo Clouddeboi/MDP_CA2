@@ -692,7 +692,7 @@ void GameServer::UpdateClientState()
     for (uint8_t id : playerIds)
     {
         const auto& a = m_aircraft_info[id];
-        p << id << a.m_position.x << a.m_position.y << a.m_hitpoints << a.m_missile_ammo << a.m_anim;
+        p << id << a.m_position.x << a.m_position.y << a.m_velocity.x << a.m_velocity.y << a.m_hitpoints << a.m_missile_ammo << a.m_anim;
     }
 
     SendToAll(p);
