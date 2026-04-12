@@ -16,3 +16,8 @@ bool CommandQueue::IsEmpty() const
 {
     return m_queue.empty();
 }
+
+void CommandQueue::Clear()
+{
+    m_queue = {};
+}

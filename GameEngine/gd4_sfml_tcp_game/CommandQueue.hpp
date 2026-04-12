@@ -8,6 +8,7 @@ public:
 	void Push(const Command& command);
 	Command Pop();
 	bool IsEmpty() const;
+	void Clear();
 
 private:
 	std::queue<Command> m_queue;

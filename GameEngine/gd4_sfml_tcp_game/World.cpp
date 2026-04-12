@@ -246,6 +246,7 @@ void World::Update(sf::Time dt)
 	}
 
 	m_scenegraph.RemoveWrecks();
+	m_command_queue.Clear();
 
 	m_scenegraph.Update(sf::Time::Zero, m_command_queue);
 	while (!m_command_queue.IsEmpty())
