@@ -926,3 +926,13 @@ void GameServer::BroadcastProjectileSpawn(uint8_t ownerId, float x, float y, flo
     ev.vx = vx; ev.vy = vy;
     PushHostEvent(ev);
 }
+
+void GameServer::BroadcastScores(const std::vector<int>& scores)
+{
+    sf::Packet packet;
+    packet << static_cast<uint8_t>(Server::PacketType::kScoreUpdate);
+    packet << static_cast<uint8_t>(scores.size());
+    for (int s : scores)
+        packet << static_cast<int32_t>(s);
+    SendToAll(packet);
+}

@@ -67,6 +67,13 @@ MultiplayerGameState::MultiplayerGameState(StateStack& stack, Context context)
 			srv->PushHostEvent(ev);
 		}
 	}
+
+	// Ensure both host and client have score displays for all network players
+	m_world.SetTotalNetworkPlayerCount(2);
+
+	// Client receives scores from host — it must not compute them independently
+	if (!isHost)
+		m_world.SetScoreAuthoritative(false);
 }
 
 void MultiplayerGameState::Draw()
@@ -348,6 +355,17 @@ bool MultiplayerGameState::Update(sf::Time dt)
 		}
 	}
 
+	// Host: broadcast updated scores to client whenever they change
+	if (GetContext().network && GetContext().network->IsHosting())
+	{
+		std::vector<int> updated_scores;
+		if (m_world.PollScoresChanged(updated_scores))
+		{
+			if (auto* srv = GetContext().network->GetServer())
+				srv->BroadcastScores(updated_scores);
+		}
+	}
+
 	return true;
 }
 
@@ -540,6 +558,28 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 		}
 
 		m_has_new_snapshot = true;
+	}
+	break;
+	case Server::PacketType::kScoreUpdate:
+	{
+		std::uint8_t count = 0;
+		if (!(packet >> count))
+			return;
+
+		std::vector<int> scores(count);
+		for (std::uint8_t i = 0; i < count; ++i)
+		{
+			std::int32_t s = 0;
+			if (!(packet >> s))
+				return;
+			scores[i] = static_cast<int>(s);
+		}
+
+		m_world.ApplyNetworkScores(scores);
+		std::cout << "[MP] kScoreUpdate received: ";
+		for (int i = 0; i < static_cast<int>(scores.size()); ++i)
+			std::cout << "P" << i << "=" << scores[i] << " ";
+		std::cout << "\n";
 	}
 	break;
 	case Server::PacketType::kPlayerColorSync:

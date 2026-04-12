@@ -25,7 +25,8 @@ namespace Server
 		kLobbySnapshot,
 		kLobbyAssignedIndex,
 		kPlayerColorSync,
-		kSpawnProjectile
+		kSpawnProjectile,
+		kScoreUpdate
 	};
 }
 

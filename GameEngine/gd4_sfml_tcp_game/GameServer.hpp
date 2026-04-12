@@ -68,6 +68,8 @@ public:
 	bool PollHostEvent(HostEvent& outEvent);
 	void PushHostEvent(const HostEvent& event);
 
+	void BroadcastScores(const std::vector<int>& scores);
+
 private:
 	struct RemotePeer
 	{

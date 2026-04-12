@@ -349,74 +349,116 @@ void World::UpdateCameraZoom(sf::Time dt)
 
 void World::CheckRoundEnd()
 {
-	if (m_player_aircrafts.size() < 2)
+	// In network mode we have 1 local + N remote actors; in local mode we need 2+ local players.
+	const int total_combatants = static_cast<int>(m_player_aircrafts.size())
+		+ static_cast<int>(m_network_actors.size());
+	if (total_combatants < 2)
 		return;
 
 	if (m_round_over)
 		return;
 
 	int alive_count = CountAlivePlayers();
-	int last_alive_player = -1;
 
-	//Find which player is still alive
+	if (alive_count > 1)
+		return;
+
+	m_round_over = true;
+	m_round_restart_timer = sf::Time::Zero;
+
+	// Per-player status log
+	std::cout << "\n=== ROUND " << m_current_round << " OVER ===" << std::endl;
 	for (size_t i = 0; i < m_player_aircrafts.size(); ++i)
 	{
-		if (m_player_aircrafts[i] && !m_player_aircrafts[i]->IsDestroyed())
+		if (m_player_aircrafts[i])
 		{
-			last_alive_player = static_cast<int>(i);
+			bool is_alive = !m_player_aircrafts[i]->IsDestroyed();
+			int hp = m_player_aircrafts[i]->GetHitPoints();
+			std::cout << "Player " << (i + 1) << ": "
+				<< (is_alive ? "ALIVE" : "ELIMINATED")
+				<< " (HP: " << hp << ")" << std::endl;
 		}
 	}
 
-	//If 1 player alive
-	if (alive_count <= 1)
+	// Only the authoritative side (host / local game) increments scores
+	if (m_score_authoritative)
 	{
-		m_round_over = true;
-		m_round_restart_timer = sf::Time::Zero;
-
-
-		//Per player status
-		std::cout << "\n=== ROUND " << m_current_round << " OVER ===" << std::endl;
-		for (size_t i = 0; i < m_player_aircrafts.size(); ++i)
+		if (m_is_network_mode)
 		{
-			if (m_player_aircrafts[i])
+			// Network mode: use networkId as score slot so display order is consistent
+			int winner_net_id = -1;
+
+			// Check local aircraft
+			for (const Aircraft* p : m_player_aircrafts)
 			{
-				bool is_alive = !m_player_aircrafts[i]->IsDestroyed();
-				int hp = m_player_aircrafts[i]->GetHitPoints();
-				std::cout << "Player " << (i + 1) << ": "
-					<< (is_alive ? "ALIVE" : "ELIMINATED")
-					<< " (HP: " << hp << ")" << std::endl;
+				if (p && p->IsUsingPhysics() && !p->IsDestroyed())
+				{
+					winner_net_id = m_local_network_id;
+					break;
+				}
+			}
+
+			// Check remote network actors
+			for (const auto& kv : m_network_actors)
+			{
+				if (kv.second && !kv.second->IsDestroyed())
+				{
+					winner_net_id = static_cast<int>(kv.first);
+					break;
+				}
+			}
+
+			if (winner_net_id >= 0 && winner_net_id < static_cast<int>(m_player_scores.size()))
+			{
+				m_player_scores[winner_net_id]++;
+				std::cout << "\nNetwork Player " << winner_net_id << " WINS" << std::endl;
+			}
+			else
+			{
+				std::cout << "\nDRAW - All players eliminated!" << std::endl;
+			}
+		}
+		else
+		{
+			// Local game: use index in m_player_aircrafts as score slot
+			int last_alive_player = -1;
+			for (size_t i = 0; i < m_player_aircrafts.size(); ++i)
+			{
+				if (m_player_aircrafts[i] && !m_player_aircrafts[i]->IsDestroyed())
+					last_alive_player = static_cast<int>(i);
+			}
+
+			if (alive_count == 1 && last_alive_player >= 0)
+			{
+				m_player_scores[last_alive_player]++;
+				std::cout << "\nPlayer " << (last_alive_player + 1) << " WINS" << std::endl;
+			}
+			else
+			{
+				std::cout << "\nDRAW - Both players eliminated!" << std::endl;
 			}
 		}
 
-		if (alive_count == 1 && last_alive_player >= 0)
-		{
-			m_player_scores[last_alive_player]++;
-			std::cout << "\nPlayer " << (last_alive_player + 1) << " WINS" << std::endl;
-		}
-		else
-		{
-			//This probably won't happen in 2 player mode, but just in case
-			std::cout << "\nDRAW - Both players eliminated!" << std::endl;
-		}
-
-		std::cout << "\n--- SCORES ---" << std::endl;
-		for (size_t i = 0; i < m_player_scores.size(); ++i)
-		{
-			std::cout << "Player " << (i + 1) << ": " << m_player_scores[i] << " points" << std::endl;
-		}
-
-		if (IsGameOver())
-		{
-			int winner = GetWinner();
-			std::cout << "\n*** PLAYER " << (winner + 1) << " WINS THE GAME! ***" << std::endl;
-		}
-		else
-		{
-			std::cout << "\nNext round starts in " << m_round_restart_delay.asSeconds() << " seconds..." << std::endl;
-		}
-
-		std::cout << "====================\n" << std::endl;
+		m_scores_dirty = true;
 	}
+
+	std::cout << "\n--- SCORES ---" << std::endl;
+	for (size_t i = 0; i < m_player_scores.size(); ++i)
+	{
+		std::cout << "Player " << (i + 1) << ": " << m_player_scores[i] << " points" << std::endl;
+	}
+
+	if (IsGameOver())
+	{
+		int winner = GetWinner();
+		std::cout << "\n*** PLAYER " << (winner + 1) << " WINS THE GAME! ***" << std::endl;
+	}
+	else
+	{
+		std::cout << "\nNext round starts in " << m_round_restart_delay.asSeconds() << " seconds..." << std::endl;
+	}
+
+	std::cout << "====================\n" << std::endl;
 }
 
 void World::StartNewRound()
@@ -649,6 +691,72 @@ void World::UpdateRoundOverlay()
 	sf::FloatRect countdown_bounds = m_round_countdown_text->getLocalBounds();
 	m_round_countdown_text->setOrigin({ countdown_bounds.position.x + countdown_bounds.size.x / 2.f, countdown_bounds.position.y + countdown_bounds.size.y / 2.f });
 	m_round_countdown_text->setPosition({ view_center.x, view_center.y + 50.f });//Fixed screen position
+}
+
+void World::SetTotalNetworkPlayerCount(int count)
+{
+	if (count <= static_cast<int>(m_player_scores.size()))
+		return; // Already enough slots
+
+	const float score_text_size = 2.f;
+	const float score_spacing = 60.f;
+
+	const int start = static_cast<int>(m_player_scores.size());
+	m_player_scores.resize(count, 0);
+
+	for (int i = start; i < count; ++i)
+	{
+		std::string placeholder = "0";
+		std::unique_ptr<TextNode> score_display(new TextNode(m_fonts, placeholder));
+		score_display->setPosition({ 20.f, 20.f + (i * score_spacing) });
+		score_display->setScale({ score_text_size, score_text_size });
+
+		if (i == 0)
+			score_display->SetColor(sf::Color::Red);
+		else if (i == 1)
+			score_display->SetColor(sf::Color::Yellow);
+		else
+		{
+			sf::Color c(
+				100 + (i * 30) % 155,
+				100 + (i * 50) % 155,
+				100 + (i * 70) % 155
+			);
+			score_display->SetColor(c);
+		}
+
+		score_display->SetOutlineColor(sf::Color::Black);
+		score_display->SetOutlineThickness(3.f);
+		m_score_displays.push_back(score_display.get());
+		m_scene_layers[static_cast<int>(SceneLayers::kUI)]->AttachChild(std::move(score_display));
+	}
+
+	m_is_network_mode = true;
+}
+
+void World::ApplyNetworkScores(const std::vector<int>& scores)
+{
+	for (size_t i = 0; i < scores.size(); ++i)
+	{
+		if (i < m_player_scores.size())
+			m_player_scores[i] = scores[i];
+	}
+	UpdateScoreDisplay();
+}
+
+bool World::PollScoresChanged(std::vector<int>& outScores)
+{
+	if (!m_scores_dirty)
+		return false;
+
+	outScores = m_player_scores;
+	m_scores_dirty = false;
+	return true;
+}
+
+void World::SetScoreAuthoritative(bool isAuthoritative)
+{
+	m_score_authoritative = isAuthoritative;
 }
 
 void World::Draw()
