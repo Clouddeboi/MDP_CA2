@@ -136,21 +136,19 @@ void NetworkSession::Reset()
 	m_server.reset();
 
 	if (m_client_socket)
-	{
 		m_client_socket->disconnect();
-	}
+
 	m_client_socket.reset();
 	m_client_connected = false;
-
 	m_mode = NetworkMode::kNone;
 	m_last_error.clear();
 
 	m_pending_remote_binding_events.clear();
 	m_pending_start_game = false;
 	m_pending_player_left_events.clear();
-
 	m_pending_assigned_local_player_index = -1;
 	m_has_pending_assigned_local_player_index = false;
+	m_pending_gameplay_packets.clear();
 }
 
 bool NetworkSession::IsActive() const
@@ -271,19 +269,13 @@ void NetworkSession::PollLobbyPackets()
 		bool ready = false;
 
 		while (m_server->PollClientLobbyBindingState(playerIndex, color, ready))
-		{
 			m_pending_remote_binding_events.emplace_back(playerIndex, color, ready);
-		}
 
 		if (m_server->PollClientStartRequest())
-		{
 			m_pending_start_game = true;
-		}
 
 		while (m_server->PollClientLeave(playerIndex))
-		{
 			m_pending_player_left_events.push_back(playerIndex);
-		}
 
 		return;
 	}
@@ -299,8 +291,10 @@ void NetworkSession::PollLobbyPackets()
 
 			if (status == sf::Socket::Status::Done)
 			{
+				// Peek at the type byte without consuming it
+				sf::Packet peek = p;
 				std::uint8_t type = 0;
-				p >> type;
+				peek >> type;
 
 				const auto packetType = static_cast<Server::PacketType>(type);
 
@@ -308,14 +302,10 @@ void NetworkSession::PollLobbyPackets()
 				{
 					std::uint8_t playerIdx = 0;
 					std::int32_t color = -1;
-					bool ready = false;
-					p >> playerIdx >> color >> ready;
-
+					bool rdy = false;
+					peek >> playerIdx >> color >> rdy;
 					m_pending_remote_binding_events.emplace_back(
-						static_cast<int>(playerIdx),
-						static_cast<int>(color),
-						ready
-					);
+						static_cast<int>(playerIdx), static_cast<int>(color), rdy);
 				}
 				else if (packetType == Server::PacketType::kLobbyStartGame)
 				{
@@ -324,44 +314,38 @@ void NetworkSession::PollLobbyPackets()
 				else if (packetType == Server::PacketType::kLobbyPlayerLeft)
 				{
 					std::uint8_t leftIdx = 0;
-					p >> leftIdx;
+					peek >> leftIdx;
 					m_pending_player_left_events.push_back(static_cast<int>(leftIdx));
 				}
 				else if (packetType == Server::PacketType::kLobbySnapshot)
 				{
 					std::uint8_t count = 0;
-					p >> count;
-
+					peek >> count;
 					for (std::uint8_t i = 0; i < count; ++i)
 					{
 						std::uint8_t playerIdx = 0;
 						std::int32_t color = -1;
-						bool ready = false;
+						bool rdy = false;
 						bool connected = false;
-
-						p >> playerIdx >> color >> ready >> connected;
-
+						peek >> playerIdx >> color >> rdy >> connected;
 						if (connected)
-						{
 							m_pending_remote_binding_events.emplace_back(
-								static_cast<int>(playerIdx),
-								static_cast<int>(color),
-								ready
-							);
-						}
+								static_cast<int>(playerIdx), static_cast<int>(color), rdy);
 						else
-						{
 							m_pending_player_left_events.push_back(static_cast<int>(playerIdx));
-						}
 					}
 				}
 				else if (packetType == Server::PacketType::kLobbyAssignedIndex)
 				{
 					std::uint8_t assigned = 0;
-					p >> assigned;
-
+					peek >> assigned;
 					m_pending_assigned_local_player_index = static_cast<int>(assigned);
 					m_has_pending_assigned_local_player_index = true;
+				}
+				else
+				{
+					// Not a lobby packet — preserve it for PollGameplayPacket
+					m_pending_gameplay_packets.push_back(p);
 				}
 
 				continue;
@@ -369,7 +353,6 @@ void NetworkSession::PollLobbyPackets()
 
 			if (status == sf::Socket::Status::Disconnected)
 			{
-				//Host went away
 				m_client_connected = false;
 				m_pending_player_left_events.push_back(0);
 			}
@@ -438,6 +421,14 @@ bool NetworkSession::PollGameplayPacket(sf::Packet& outPacket)
 	// Client path: read from TCP socket
 	if (m_mode == NetworkMode::kClient && m_client_socket && m_client_connected)
 	{
+		// Drain any packets that were buffered during the lobby phase first
+		if (!m_pending_gameplay_packets.empty())
+		{
+			outPacket = std::move(m_pending_gameplay_packets.front());
+			m_pending_gameplay_packets.pop_front();
+			return true;
+		}
+
 		m_client_socket->setBlocking(false);
 		const auto status = m_client_socket->receive(outPacket);
 
@@ -445,16 +436,14 @@ bool NetworkSession::PollGameplayPacket(sf::Packet& outPacket)
 			return true;
 
 		if (status == sf::Socket::Status::Disconnected)
-		{
 			m_client_connected = false;
-		}
+
 		return false;
 	}
 
 	// Host path: first drain host events (connect/disconnect), then snapshot
 	if (m_mode == NetworkMode::kHost && m_server)
 	{
-		// Priority: deliver connect/disconnect events before state snapshots
 		GameServer::HostEvent event;
 		if (m_server->PollHostEvent(event))
 		{
@@ -477,7 +466,6 @@ bool NetworkSession::PollGameplayPacket(sf::Packet& outPacket)
 			return false;
 		m_host_snapshot_clock.restart();
 
-		// Then synthesize kUpdateClientState from server state
 		std::vector<GameServer::NetAircraftState> states;
 		m_server->CopyAircraftStates(states);
 
@@ -486,13 +474,12 @@ bool NetworkSession::PollGameplayPacket(sf::Packet& outPacket)
 
 		outPacket.clear();
 		outPacket << static_cast<std::uint8_t>(Server::PacketType::kUpdateClientState);
-		outPacket << 0.f; // worldScroll placeholder
+		outPacket << 0.f;
 		outPacket << static_cast<std::uint8_t>(states.size());
 
 		for (const auto& s : states)
-		{
 			outPacket << s.id << s.position.x << s.position.y << s.hp << s.ammo;
-		}
+
 		return true;
 	}
 

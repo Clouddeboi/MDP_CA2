@@ -97,4 +97,6 @@ private:
 
 	sf::Clock m_host_snapshot_clock;
 	static constexpr float kHostSnapshotIntervalMs = 50.f;
+
+	std::deque<sf::Packet> m_pending_gameplay_packets;
 };
