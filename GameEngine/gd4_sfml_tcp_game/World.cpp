@@ -2364,12 +2364,7 @@ std::uint8_t World::GetLocalPlayerAnimState(int playerSlot) const
 		return 0;
 	const Aircraft* a = m_player_aircrafts[playerSlot];
 	if (!a) return 0;
-
-	const sf::Vector2f vel = a->GetVelocity();
-	const bool facingRight = vel.x >= 0.f; // mirrors Aircraft::UpdateCurrent logic
-	const bool isRunning = std::abs(vel.x) > 10.f;
-
-	return static_cast<std::uint8_t>((facingRight ? 1u : 0u) | (isRunning ? 2u : 0u));
+	return a->GetNetAnimState();   // reads m_net_facing_right / m_net_is_running
 }
 
 void World::SetOnProjectileFiredCallback(

@@ -37,7 +37,7 @@ public:
 
 	void BroadcastLobbySnapshot();
 
-	void UpdateHostAircraftState(const sf::Vector2f& pos, uint8_t hp, uint8_t ammo, uint8_t anim = 0);
+	void UpdateHostAircraftState(const sf::Vector2f& pos, const sf::Vector2f& vel, uint8_t hp, uint8_t ammo, uint8_t anim = 0);
 	void SetAircraftColor(uint8_t id, uint8_t r, uint8_t g, uint8_t b);
 	void BroadcastAllColors();
 
@@ -47,6 +47,7 @@ public:
 	{
 		std::uint8_t id;
 		sf::Vector2f position;
+		sf::Vector2f velocity{ 0.f, 0.f };
 		std::uint8_t hp;
 		std::uint8_t ammo;
 		std::uint8_t anim = 0;
@@ -84,6 +85,7 @@ private:
 	struct AircraftInfo
 	{
 		sf::Vector2f m_position;
+		sf::Vector2f m_velocity{ 0.f, 0.f };
 		uint8_t m_hitpoints;
 		uint8_t m_missile_ammo;
 		std::map<uint8_t, bool> m_real_time_actions;

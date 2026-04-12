@@ -28,6 +28,7 @@ private:
 	{
 		std::uint8_t id = 0;
 		float x = 0.f;
+		float vx = 0.f, vy = 0.f;
 		float y = 0.f;
 		std::uint8_t hp = 0;
 		std::uint8_t ammo = 0;
@@ -39,6 +40,7 @@ private:
 	{
 		sf::Vector2f current{ 0.f, 0.f };
 		sf::Vector2f target{ 0.f, 0.f };
+		sf::Vector2f velocity{ 0.f, 0.f };
 		std::uint8_t hp = 0;
 		std::uint8_t ammo = 0;
 		std::uint8_t anim = 0;

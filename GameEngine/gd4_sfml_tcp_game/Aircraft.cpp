@@ -608,6 +608,8 @@ void Aircraft::UpdateCurrent(sf::Time dt, CommandQueue& commands)
 			m_facing_right = false;
 		}
 
+		m_net_is_running = is_moving;
+
 		//Flip horizontal scale of animation to match facing direction
 		if (m_facing_right)
 		{

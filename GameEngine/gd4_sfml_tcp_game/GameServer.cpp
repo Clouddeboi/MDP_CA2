@@ -339,21 +339,17 @@ void GameServer::HandleIncomingPackets(sf::Packet& packet, RemotePeer& receiving
     {
         uint8_t num_aircraft;
         packet >> num_aircraft;
-
         std::scoped_lock lock(m_aircraft_mutex);
         for (uint8_t i = 0; i < num_aircraft; ++i)
         {
-            uint8_t aircraft_identifier;
-            uint8_t aircraft_hitpoints;
-            uint8_t missile_ammo;
-            uint8_t anim;
-            sf::Vector2f aircraft_position;
-            packet >> aircraft_identifier >> aircraft_position.x >> aircraft_position.y
-                >> aircraft_hitpoints >> missile_ammo >> anim;
-            m_aircraft_info[aircraft_identifier].m_position = aircraft_position;
-            m_aircraft_info[aircraft_identifier].m_hitpoints = aircraft_hitpoints;
-            m_aircraft_info[aircraft_identifier].m_missile_ammo = missile_ammo;
-            m_aircraft_info[aircraft_identifier].m_anim = anim;
+            uint8_t id, hp, ammo, anim;
+            sf::Vector2f pos, vel;
+            packet >> id >> pos.x >> pos.y >> vel.x >> vel.y >> hp >> ammo >> anim;
+            m_aircraft_info[id].m_position = pos;
+            m_aircraft_info[id].m_velocity = vel;
+            m_aircraft_info[id].m_hitpoints = hp;
+            m_aircraft_info[id].m_missile_ammo = ammo;
+            m_aircraft_info[id].m_anim = anim;
         }
     }
     break;
@@ -854,6 +850,7 @@ void GameServer::CopyAircraftStates(std::vector<NetAircraftState>& outStates) co
         NetAircraftState s;
         s.id = kv.first;
         s.position = kv.second.m_position;
+        s.velocity = kv.second.m_velocity;
         s.hp = kv.second.m_hitpoints;
         s.ammo = kv.second.m_missile_ammo;
         s.anim = kv.second.m_anim;
@@ -861,10 +858,11 @@ void GameServer::CopyAircraftStates(std::vector<NetAircraftState>& outStates) co
     }
 }
 
-void GameServer::UpdateHostAircraftState(const sf::Vector2f& pos, uint8_t hp, uint8_t ammo, uint8_t anim)
+void GameServer::UpdateHostAircraftState(const sf::Vector2f& pos, const sf::Vector2f& vel, uint8_t hp, uint8_t ammo, uint8_t anim)
 {
     std::scoped_lock lock(m_aircraft_mutex);
     m_aircraft_info[0].m_position = pos;
+    m_aircraft_info[0].m_velocity = vel;
     m_aircraft_info[0].m_hitpoints = hp;
     m_aircraft_info[0].m_missile_ammo = ammo;
     m_aircraft_info[0].m_anim = anim;

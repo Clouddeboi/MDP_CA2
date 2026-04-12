@@ -60,6 +60,12 @@ public:
 
 	void SetRemoteAnimState(std::uint8_t animFlags);
 
+	std::uint8_t GetNetAnimState() const
+	{
+		return static_cast<std::uint8_t>(
+			(m_net_facing_right ? 1u : 0u) | (m_net_is_running ? 2u : 0u));
+	}
+
 private:
 	virtual void DrawCurrent(sf::RenderTarget& target, sf::RenderStates states) const;
 	virtual void UpdateCurrent(sf::Time dt, CommandQueue& commands) override;
@@ -146,5 +152,8 @@ private:
 
 	sf::Color m_player_color;
 	bool m_using_color_tint;
+
+	bool m_net_is_running = false;
+	bool m_net_facing_right = true;
 };
 

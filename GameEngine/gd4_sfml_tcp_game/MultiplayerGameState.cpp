@@ -111,6 +111,7 @@ bool MultiplayerGameState::Update(sf::Time dt)
 			{
 				interp.current = { s.x, s.y };
 				interp.target = { s.x, s.y };
+				interp.velocity = { s.vx, s.vy };
 				interp.hp = s.hp;
 				interp.ammo = s.ammo;
 				interp.initialized = true;
@@ -174,13 +175,13 @@ bool MultiplayerGameState::Update(sf::Time dt)
 			if (a)
 			{
 				const sf::Vector2f pos = a->getPosition();
+				const sf::Vector2f vel = a->GetVelocity();
 				const uint8_t hp = static_cast<uint8_t>(std::max(0, std::min(255, a->GetHitPoints())));
-				const uint8_t ammo = 0;
 				const uint8_t anim = m_world.GetLocalPlayerAnimState(0);
 
 				auto* server = GetContext().network->GetServer();
 				if (server)
-					server->UpdateHostAircraftState(pos, hp, ammo, anim);
+					server->UpdateHostAircraftState(pos, vel, hp, 0, anim);
 			}
 		}
 		// CLIENT path: send via TCP (existing logic)
@@ -246,8 +247,9 @@ bool MultiplayerGameState::Update(sf::Time dt)
 				const std::uint8_t hp = static_cast<std::uint8_t>(std::max(0, std::min(255, a->GetHitPoints())));
 				const std::uint8_t ammo = 0;
 
+				const sf::Vector2f vel = a->GetVelocity();
 				const std::uint8_t anim = m_world.GetLocalPlayerAnimState(localSlot);
-				p << aircraft_identifier << pos.x << pos.y << hp << ammo << anim;
+				p << aircraft_identifier << pos.x << pos.y << vel.x << vel.y << hp << ammo << anim;
 
 				auto& last = m_last_sent_local_states[aircraft_identifier];
 				last.position = pos;
@@ -274,15 +276,36 @@ bool MultiplayerGameState::Update(sf::Time dt)
 	{
 		const std::uint8_t id = kv.first;
 		auto& st = kv.second;
+		if (!st.initialized) continue;
 
-		if (!st.initialized)
-			continue;
+		// Dead-reckoning: advance by known velocity, then snap toward authoritative target
+		st.current += st.velocity * dt.asSeconds();
 
+		// Correct drift back toward the server-authoritative position
 		const sf::Vector2f delta = st.target - st.current;
-		const float lerpFactor = std::min(1.f, dt.asSeconds() * 12.f);
-		st.current += delta * lerpFactor;
+		const float dist = std::hypot(delta.x, delta.y);
 
-		m_world.UpdateNetworkActorState(id, st.current, st.hp, st.ammo, st.anim);
+		if (dist > 200.f)
+		{
+			// Too far — hard snap (teleport / respawn)
+			st.current = st.target;
+		}
+		else if (dist > 2.f)
+		{
+			// Blend toward target at a rate proportional to distance
+			// (faster correction when further away)
+			const float correctionRate = std::min(1.f, dt.asSeconds() * 15.f);
+			st.current += delta * correctionRate;
+		}
+
+		// Derive animation directly from velocity — same logic as local player
+		const float vx = st.velocity.x;
+		const bool facingRight = (vx >= 0.f) || (std::abs(vx) < 1.f && (st.anim & 1u));
+		const bool isRunning = std::abs(vx) > 10.f;
+		const std::uint8_t animFlags = static_cast<std::uint8_t>(
+			(facingRight ? 1u : 0u) | (isRunning ? 2u : 0u));
+
+		m_world.UpdateNetworkActorState(id, st.current, st.hp, st.ammo, animFlags);
 	}
 	m_perf.interp_time_total += interp_timer.getElapsedTime();
 
@@ -456,15 +479,18 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 		auto& cfg = PlayerBindingConfig::GetInstance();
 		auto myColor = cfg.GetPlayerColor(0);
 		if (myColor.has_value() && aircraftId != 0)
-		{
 			cfg.SetPlayerColor(static_cast<int>(aircraftId), myColor.value());
-		}
 
-		// Apply our own correct color to our local actor immediately
+		// Re-tint the ALREADY-BUILT local aircraft with its correct color
 		if (myColor.has_value())
 		{
 			Aircraft* a = m_world.GetPlayerAircraft(0);
-			if (a) a->SetPlayerColor(myColor.value());
+			if (a)
+			{
+				a->SetPlayerColor(myColor.value());
+				std::cout << "[MP] Applied local color to aircraft: id=" << (int)aircraftId
+					<< " rgb=(" << (int)myColor->r << "," << (int)myColor->g << "," << (int)myColor->b << ")\n";
+			}
 		}
 
 		// Immediately push corrected spawn position to server
@@ -523,7 +549,7 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 		for (std::uint8_t i = 0; i < count; ++i)
 		{
 			NetActorState s;
-			if (!(packet >> s.id >> s.x >> s.y >> s.hp >> s.ammo >> s.anim))
+			if (!(packet >> s.id >> s.x >> s.y >> s.vx >> s.vy >> s.hp >> s.ammo >> s.anim))
 				return;
 
 			m_latest_snapshot.push_back(s);
