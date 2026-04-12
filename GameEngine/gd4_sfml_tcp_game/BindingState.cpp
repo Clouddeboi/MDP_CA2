@@ -3,6 +3,7 @@
 #include "Utility.hpp"
 #include "PlayerBindingConfig.hpp"
 #include "NetworkSession.hpp" 
+#include "NetworkSlotColor.hpp"
 #include <SFML/Graphics/RenderWindow.hpp>
 #include <iostream>
 
@@ -762,29 +763,33 @@ void BindingState::AddPlayer(const InputDeviceInfo& device)
 
 	m_joined_players.push_back(newPlayer);
 
-	//Update grid slot
 	m_player_slots[playerIndex].SetPlayerInfo(playerIndex + 1, device);
 
-	//Set available colors
-	m_player_slots[playerIndex].SetAvailableColors(m_all_colors);
-
-	//Mark taken colors as unavailable
-	for (size_t i = 0; i < m_all_colors.size(); ++i)
+	if (m_network_mode)
 	{
-		m_player_slots[playerIndex].MarkColorAsUnavailable(i, m_color_taken[i]);
+		// In network mode: mark slot as network-mode (hides picker permanently),
+		// then apply the deterministic palette color directly to the sprite.
+		m_player_slots[playerIndex].SetNetworkMode(true);
+		m_player_slots[playerIndex].SetPlayerColor(NetworkSlotColor(
+			static_cast<std::uint8_t>(playerIndex)));
 	}
-
-	//Local ownership in network mode
-	const bool canControlThisSlot = (!m_network_mode) || (playerIndex == m_local_player_index);
-	m_player_slots[playerIndex].ShowColorPicker(canControlThisSlot);
-
-	//Auto-select first available color, but DON'T mark as taken yet
-	for (size_t i = 0; i < m_all_colors.size(); ++i)
+	else
 	{
-		if (!m_color_taken[i])
+		// Local mode: full color picker as before
+		m_player_slots[playerIndex].SetAvailableColors(m_all_colors);
+
+		for (size_t i = 0; i < m_all_colors.size(); ++i)
+			m_player_slots[playerIndex].MarkColorAsUnavailable(i, m_color_taken[i]);
+
+		m_player_slots[playerIndex].ShowColorPicker(true);
+
+		for (size_t i = 0; i < m_all_colors.size(); ++i)
 		{
-			m_player_slots[playerIndex].SelectColorAtIndex(static_cast<int>(i));
-			break;
+			if (!m_color_taken[i])
+			{
+				m_player_slots[playerIndex].SelectColorAtIndex(static_cast<int>(i));
+				break;
+			}
 		}
 	}
 }

@@ -235,6 +235,7 @@
     <ClInclude Include="MusicThemes.hpp" />
     <ClInclude Include="NetworkProtocol.hpp" />
     <ClInclude Include="NetworkSession.hpp" />
+    <ClInclude Include="NetworkSlotColor.hpp" />
     <ClInclude Include="Particle.hpp" />
     <ClInclude Include="ParticleNode.hpp" />
     <ClInclude Include="ParticleType.hpp" />

@@ -35,6 +35,8 @@ public:
 
 	void ShowColorPicker(bool show);
 	bool IsShowingColorPicker() const;
+	void SetNetworkMode(bool networkMode);
+
 	void SetAvailableColors(const std::vector<sf::Color>& colors);
 	int GetColorIndexAtPosition(const sf::Vector2f& mousePos) const;
 	void SelectColorAtIndex(int index);
@@ -72,6 +74,8 @@ private:
 	bool m_is_occupied;
 
 	bool m_showing_color_picker;
+	bool m_network_mode = false;
+
 	int m_selected_color_index;
 	std::vector<sf::Color> m_available_colors;
 	std::vector<bool> m_color_unavailable;

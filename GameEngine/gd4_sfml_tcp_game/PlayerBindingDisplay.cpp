@@ -243,6 +243,10 @@ bool PlayerBindingDisplay::IsReady() const
 
 void PlayerBindingDisplay::ShowColorPicker(bool show)
 {
+	//Never show the picker in network mode since colors are assigned by slot ID
+	if (m_network_mode)
+		show = false;
+
 	m_showing_color_picker = show;
 	UpdateLayout();
 }
@@ -405,5 +409,18 @@ void PlayerBindingDisplay::MarkColorAsUnavailable(int colorIndex, bool unavailab
 	{
 		m_color_unavailable[colorIndex] = unavailable;
 		UpdateColorCursorHighlight();
+	}
+}
+
+void PlayerBindingDisplay::SetNetworkMode(bool networkMode)
+{
+	m_network_mode = networkMode;
+	if (m_network_mode)
+	{
+		//Immediately hide the picker and clear the color boxes so they never render
+		m_showing_color_picker = false;
+		m_color_boxes.clear();
+		m_color_unavailable.clear();
+		m_available_colors.clear();
 	}
 }
