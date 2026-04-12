@@ -10,6 +10,22 @@
 #include <cstdint>
 #include <cmath>
 
+// Returns a distinct, visually-strong color for a given network slot.
+// Both host and client call this with the same ID → always get the same color.
+static sf::Color NetworkSlotColor(std::uint8_t networkId)
+{
+	static const sf::Color kPalette[] = {
+		sf::Color(220,  50,  50),   // 0 — red    (host)
+		sf::Color(50, 120, 220),   // 1 — blue   (client)
+		sf::Color(50, 200,  80),   // 2 — green
+		sf::Color(230, 160,  20),   // 3 — orange
+		sf::Color(180,  60, 220),   // 4 — purple
+		sf::Color(20, 200, 200),   // 5 — teal
+	};
+	constexpr std::size_t kCount = sizeof(kPalette) / sizeof(kPalette[0]);
+	return kPalette[networkId % kCount];
+}
+
 MultiplayerGameState::MultiplayerGameState(StateStack& stack, Context context)
 	: State(stack, context)
 	, m_world(
@@ -49,23 +65,26 @@ MultiplayerGameState::MultiplayerGameState(StateStack& stack, Context context)
 	{
 		m_world.SetLocalNetworkId(0);
 
-		auto& config = PlayerBindingConfig::GetInstance();
-		auto hostColor = config.GetPlayerColor(0);
-		if (hostColor.has_value() && GetContext().network->GetServer())
+		// Host is always network ID 0 — pick its color from the shared palette
+		const sf::Color hostColor = NetworkSlotColor(0);
+		auto* srv = GetContext().network->GetServer();
+		if (srv)
 		{
-			auto* srv = GetContext().network->GetServer();
-			srv->SetAircraftColor(0, hostColor->r, hostColor->g, hostColor->b);
+			srv->SetAircraftColor(0, hostColor.r, hostColor.g, hostColor.b);
 
-			// Push a kColorSync HostEvent so PollGameplayPacket delivers it to
-			// the host game-side — this ensures the host's own actor gets tinted
+			// Deliver color to host game-side immediately
 			GameServer::HostEvent ev;
 			ev.type = GameServer::HostEvent::kColorSync;
 			ev.aircraft_id = 0;
-			ev.r = hostColor->r;
-			ev.g = hostColor->g;
-			ev.b = hostColor->b;
+			ev.r = hostColor.r;
+			ev.g = hostColor.g;
+			ev.b = hostColor.b;
 			srv->PushHostEvent(ev);
 		}
+
+		// Apply to local physics actor right away
+		Aircraft* a = m_world.GetPlayerAircraft(0);
+		if (a) a->SetPlayerColor(hostColor);
 	}
 
 	// Ensure both host and client have score displays for all network players
@@ -489,27 +508,14 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 		std::cout << "[MP] kSpawnSelf: local aircraft id=" << static_cast<int>(aircraftId)
 			<< " server pos=(" << x << ", " << y << ")\n";
 
-		// Re-register our lobby color under our actual network ID.
-		// PlayerBindingConfig[0] held our color during lobby; now store it at
-		// aircraftId so kPlayerColorSync packets from others don't overwrite us.
-		auto& cfg = PlayerBindingConfig::GetInstance();
-		auto myColor = cfg.GetPlayerColor(0);
-		if (myColor.has_value() && aircraftId != 0)
-		{
-			cfg.SetPlayerColor(static_cast<int>(aircraftId), myColor.value());
-		}
-
-		// Apply our own correct color to our local actor immediately
-		if (myColor.has_value())
-		{
-			Aircraft* a = m_world.GetPlayerAircraft(0);
-			if (a) a->SetPlayerColor(myColor.value());
-		}
+		// Deterministic color: same palette index → same color on every machine
+		const sf::Color myColor = NetworkSlotColor(aircraftId);
+		Aircraft* a = m_world.GetPlayerAircraft(0);
+		if (a) a->SetPlayerColor(myColor);
 
 		// Immediately push corrected spawn position to server
 		if (GetContext().network && GetContext().network->IsClient())
 		{
-			Aircraft* a = m_world.GetPlayerAircraft(0);
 			if (a)
 			{
 				const sf::Vector2f pos = a->getPosition();
@@ -521,24 +527,10 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 				sf::Packet p;
 				p << static_cast<std::uint8_t>(Client::PacketType::kStateUpdate);
 				p << static_cast<std::uint8_t>(1);
-				p << aircraftId << pos.x << pos.y << vel.x << vel.y << hp
-					<< static_cast<std::uint8_t>(0) << anim;
+				p << aircraftId << pos.x << pos.y << vel.x << vel.y
+					<< hp << static_cast<std::uint8_t>(0) << anim;
 				GetContext().network->SendGameplayPacket(p);
 			}
-		}
-
-		// Send our color to the server so it can replicate to the host
-		if (myColor.has_value() && GetContext().network && GetContext().network->IsClient())
-		{
-			sf::Packet cp;
-			cp << static_cast<std::uint8_t>(Client::PacketType::kPlayerColorSync)
-				<< aircraftId
-				<< myColor->r
-				<< myColor->g
-				<< myColor->b;
-			GetContext().network->SendGameplayPacket(cp);
-			std::cout << "[MP] Sent kPlayerColorSync id=" << (int)aircraftId
-				<< " rgb=(" << (int)myColor->r << "," << (int)myColor->g << "," << (int)myColor->b << ")\n";
 		}
 	}
 	break;
@@ -681,24 +673,14 @@ void MultiplayerGameState::OnRemotePlayerConnected(std::uint8_t networkId, float
 	m_known_remote_network_ids.insert(networkId);
 	++m_perf.remote_connects;
 
-	// Spawn with white — kPlayerColorSync arrives immediately after and applies
-	// the real color. Using a stale config value here causes the wrong color to
-	// briefly (or permanently) show when the sync packet hasn't arrived yet.
-	sf::Color tint = sf::Color::White;
-
-	// Use config color only if it's already been stored under the correct network ID
-	// (i.e. a prior kPlayerColorSync already arrived for this ID)
-	auto remoteColor = PlayerBindingConfig::GetInstance().GetPlayerColor(
-		static_cast<int>(networkId));
-	if (remoteColor.has_value())
-		tint = remoteColor.value();
-
+	// Deterministic: networkId 0 always red, 1 always blue, etc.
+	// No packets needed — both machines independently compute the same color.
+	const sf::Color tint = NetworkSlotColor(networkId);
 	m_world.SpawnNetworkActor(networkId, { x, y }, tint);
 
 	std::cout << "[MP] Remote player connected: id=" << static_cast<int>(networkId)
 		<< " pos=(" << x << ", " << y << ")"
-		<< " tint=(" << (int)tint.r << "," << (int)tint.g << "," << (int)tint.b
-		<< ") config_hit=" << remoteColor.has_value() << "\n";
+		<< " tint=(" << (int)tint.r << "," << (int)tint.g << "," << (int)tint.b << ")\n";
 }
 
 void MultiplayerGameState::OnRemotePlayerDisconnected(std::uint8_t networkId)

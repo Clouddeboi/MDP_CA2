@@ -329,19 +329,10 @@ bool BindingState::Update(sf::Time dt)
 
 		if (GetContext().network->ConsumeStartGameSignal())
 		{
-			//Save all player colors to config before transitioning
-			{
-				auto& config = PlayerBindingConfig::GetInstance();
-				config.SetPlayerCount(GetJoinedPlayerCount());
-				for (int j = 0; j < GetJoinedPlayerCount(); ++j)
-				{
-					int colorIdx = m_player_slots[j].GetSelectedColorIndex();
-					if (colorIdx >= 0 && colorIdx < static_cast<int>(m_all_colors.size()))
-					{
-						config.SetPlayerColor(j, m_all_colors[colorIdx]);
-					}
-				}
-			}
+			// Colors are now assigned deterministically in-game by network ID.
+			// No need to carry lobby color choices into the game state.
+			auto& config = PlayerBindingConfig::GetInstance();
+			config.SetPlayerCount(GetJoinedPlayerCount());
 
 			RequestStackPop();
 			RequestStackPush(StateID::kMultiplayerGame);
