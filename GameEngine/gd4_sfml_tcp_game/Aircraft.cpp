@@ -912,10 +912,7 @@ void Aircraft::SetRemoteAnimState(std::uint8_t animFlags)
 		m_current_animation->Restart();
 	}
 
-	// Advance animation time so it doesn't freeze — use a fixed dt
-	m_current_animation->Update(sf::seconds(1.f / 20.f));
-
-	// Apply facing flip
+	// Apply facing flip — do NOT call Update() here; UpdateCurrent's else-branch does it
 	if (m_facing_right)
 		m_current_animation->setScale({ 1.f, 1.f });
 	else

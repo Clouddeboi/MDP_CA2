@@ -449,6 +449,16 @@ void GameServer::HandleIncomingPackets(sf::Packet& packet, RemotePeer& receiving
         BroadcastLobbySnapshot();
     }
     break;
+    case Client::PacketType::kFireProjectile:
+    {
+        uint8_t ownerId;
+        float x, y, vx, vy;
+        packet >> ownerId >> x >> y >> vx >> vy;
+
+        // Broadcast to all including back to host game-side
+        BroadcastProjectileSpawn(ownerId, x, y, vx, vy);
+    }
+    break;
     }
 }
 
@@ -898,4 +908,21 @@ void GameServer::BroadcastAllColors()
             << kv.second.m_color_b;
         SendToAll(p);
     }
+}
+
+void GameServer::BroadcastProjectileSpawn(uint8_t ownerId, float x, float y, float vx, float vy)
+{
+    // Broadcast to all connected clients
+    sf::Packet p;
+    p << static_cast<uint8_t>(Server::PacketType::kSpawnProjectile)
+        << ownerId << x << y << vx << vy;
+    SendToAll(p);
+
+    // Also push to host game-side via HostEvent
+    HostEvent ev;
+    ev.type = HostEvent::kSpawnProjectile;
+    ev.aircraft_id = ownerId;
+    ev.x = x; ev.y = y;
+    ev.vx = vx; ev.vy = vy;
+    PushHostEvent(ev);
 }

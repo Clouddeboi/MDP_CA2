@@ -41,6 +41,8 @@ public:
 	void SetAircraftColor(uint8_t id, uint8_t r, uint8_t g, uint8_t b);
 	void BroadcastAllColors();
 
+	void BroadcastProjectileSpawn(uint8_t ownerId, float x, float y, float vx, float vy);
+
 	struct NetAircraftState
 	{
 		std::uint8_t id;
@@ -54,10 +56,11 @@ public:
 
 	struct HostEvent
 	{
-		enum Type { kConnect, kDisconnect, kColorSync };
+		enum Type { kConnect, kDisconnect, kColorSync, kSpawnProjectile };
 		Type type;
 		uint8_t aircraft_id;
 		float x = 0.f, y = 0.f;
+		float vx = 0.f, vy = 0.f;
 		uint8_t r = 255, g = 255, b = 255;
 	};
 

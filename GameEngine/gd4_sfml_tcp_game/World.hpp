@@ -65,6 +65,10 @@ public:
 	void SetLocalNetworkId(int networkId);
 	void SetCollisionEnabled(bool enabled);
 
+	void SpawnNetworkProjectile(std::uint8_t ownerId, const sf::Vector2f& pos, const sf::Vector2f& vel);
+	void SetOnProjectileFiredCallback(std::function<void(std::uint8_t, sf::Vector2f, sf::Vector2f)> cb);
+	bool PollFiredProjectile(std::uint8_t& ownerId, sf::Vector2f& pos, sf::Vector2f& vel);
+
 private:
 	void LoadTextures();
 	void BuildScene();
@@ -221,5 +225,9 @@ private:
 	int m_local_network_id = 0;
 
 	std::vector<SceneNode*> m_collidables;
+
+	std::function<void(std::uint8_t, sf::Vector2f, sf::Vector2f)> m_on_projectile_fired;
+	struct PendingProjectile { std::uint8_t ownerId; sf::Vector2f pos, vel; };
+	std::deque<PendingProjectile> m_pending_fired_projectiles;
 };
 

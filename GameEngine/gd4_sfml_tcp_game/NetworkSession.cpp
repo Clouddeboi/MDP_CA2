@@ -458,6 +458,11 @@ bool NetworkSession::PollGameplayPacket(sf::Packet& outPacket)
 				outPacket << static_cast<std::uint8_t>(Server::PacketType::kPlayerColorSync);
 				outPacket << event.aircraft_id << event.r << event.g << event.b;
 			}
+			else if (event.type == GameServer::HostEvent::kSpawnProjectile)
+			{
+				outPacket << static_cast<std::uint8_t>(Server::PacketType::kSpawnProjectile);
+				outPacket << event.aircraft_id << event.x << event.y << event.vx << event.vy;
+			}
 			else
 			{
 				outPacket << static_cast<std::uint8_t>(Server::PacketType::kPlayerDisconnect);

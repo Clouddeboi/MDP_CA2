@@ -217,6 +217,27 @@ void World::Update(sf::Time dt)
 
 	m_scenegraph.Update(dt, m_command_queue);
 
+	if (m_local_network_id >= 0)
+	{
+		Command scanProjectiles;
+		scanProjectiles.category = static_cast<int>(ReceiverCategories::kAlliedProjectile);
+		const int localNetId = m_local_network_id;
+		auto* queue = &m_pending_fired_projectiles;
+		scanProjectiles.action = DerivedAction<Projectile>(
+			[localNetId, queue](Projectile& p, sf::Time)
+			{
+				if (!p.IsUsingPhysics()) return;      // skip ghost bullets
+				if (p.WasBroadcast()) return;         // skip already-reported
+				p.MarkBroadcast();
+				queue->push_back({
+					static_cast<std::uint8_t>(localNetId),
+					p.GetWorldPosition(),
+					p.GetVelocity()
+					});
+			});
+		m_scenegraph.OnCommand(scanProjectiles, sf::Time::Zero);
+	}
+
 	AdaptPlayerPosition();
 
 	if (m_collision_enabled)
@@ -2349,4 +2370,38 @@ std::uint8_t World::GetLocalPlayerAnimState(int playerSlot) const
 	const bool isRunning = std::abs(vel.x) > 10.f;
 
 	return static_cast<std::uint8_t>((facingRight ? 1u : 0u) | (isRunning ? 2u : 0u));
+}
+
+void World::SetOnProjectileFiredCallback(
+	std::function<void(std::uint8_t, sf::Vector2f, sf::Vector2f)> cb)
+{
+	m_on_projectile_fired = std::move(cb);
+}
+
+void World::SpawnNetworkProjectile(std::uint8_t ownerId,
+	const sf::Vector2f& pos, const sf::Vector2f& vel)
+{
+	// Spawn a ghost bullet locally for the remote owner — physics-enabled so it
+	// travels and collides on this machine too
+	std::unique_ptr<Projectile> bullet(
+		new Projectile(ProjectileType::kAlliedBullet, m_textures));
+	bullet->setPosition(pos);
+	bullet->SetVelocity(vel);
+	// Ghost bullets must collide — leave physics enabled (default)
+	m_scene_layers[static_cast<int>(SceneLayers::kUpperAir)]
+		->AttachChild(std::move(bullet));
+
+	std::cout << "[MP] SpawnNetworkProjectile owner=" << (int)ownerId
+		<< " pos=(" << pos.x << "," << pos.y << ")\n";
+}
+
+bool World::PollFiredProjectile(std::uint8_t& ownerId, sf::Vector2f& pos, sf::Vector2f& vel)
+{
+	if (m_pending_fired_projectiles.empty()) return false;
+	const auto& p = m_pending_fired_projectiles.front();
+	ownerId = p.ownerId;
+	pos = p.pos;
+	vel = p.vel;
+	m_pending_fired_projectiles.pop_front();
+	return true;
 }

@@ -315,6 +315,32 @@ bool MultiplayerGameState::Update(sf::Time dt)
 		m_perf = PerfCounters{};
 	}
 
+	// Flush any new projectiles the local player fired this frame to the server
+	if (GetContext().network && GetContext().network->IsActive())
+	{
+		sf::Vector2f projPos, projVel;
+		std::uint8_t ownerId = 0;
+		// GetPendingFiredProjectiles drains a queue filled by World
+		while (m_world.PollFiredProjectile(ownerId, projPos, projVel))
+		{
+			if (GetContext().network->IsClient())
+			{
+				sf::Packet p;
+				p << static_cast<std::uint8_t>(Client::PacketType::kFireProjectile)
+				  << ownerId << projPos.x << projPos.y << projVel.x << projVel.y;
+				GetContext().network->SendGameplayPacket(p);
+			}
+			else if (GetContext().network->IsHosting())
+			{
+				// Host: broadcast directly
+				if (auto* srv = GetContext().network->GetServer())
+					srv->BroadcastProjectileSpawn(ownerId, projPos.x, projPos.y, projVel.x, projVel.y);
+			}
+			std::cout << "[MP] Fire broadcast owner=" << (int)ownerId
+				<< " pos=(" << projPos.x << "," << projPos.y << ")\n";
+		}
+	}
+
 	return true;
 }
 
@@ -417,8 +443,24 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 		std::cout << "[MP] kSpawnSelf: local aircraft id=" << static_cast<int>(aircraftId)
 			<< " server pos=(" << x << ", " << y << ")\n";
 
-		// Immediately push corrected spawn position to server so the host
-		// doesn't render us at the old battlefield-center spawn.
+		// Re-register our lobby color under our actual network ID.
+		// PlayerBindingConfig[0] held our color during lobby; now store it at
+		// aircraftId so kPlayerColorSync packets from others don't overwrite us.
+		auto& cfg = PlayerBindingConfig::GetInstance();
+		auto myColor = cfg.GetPlayerColor(0);
+		if (myColor.has_value() && aircraftId != 0)
+		{
+			cfg.SetPlayerColor(static_cast<int>(aircraftId), myColor.value());
+		}
+
+		// Apply our own correct color to our local actor immediately
+		if (myColor.has_value())
+		{
+			Aircraft* a = m_world.GetPlayerAircraft(0);
+			if (a) a->SetPlayerColor(myColor.value());
+		}
+
+		// Immediately push corrected spawn position to server
 		if (GetContext().network && GetContext().network->IsClient())
 		{
 			Aircraft* a = m_world.GetPlayerAircraft(0);
@@ -431,28 +473,25 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 
 				sf::Packet p;
 				p << static_cast<std::uint8_t>(Client::PacketType::kStateUpdate);
-				p << static_cast<std::uint8_t>(1);   // 1 aircraft
+				p << static_cast<std::uint8_t>(1);
 				p << aircraftId << pos.x << pos.y << hp
-					<< static_cast<std::uint8_t>(0)    // ammo
-					<< anim;
+					<< static_cast<std::uint8_t>(0) << anim;
 				GetContext().network->SendGameplayPacket(p);
 			}
 		}
 
-		// Send our lobby-chosen color to the server so it can replicate to the host
+		// Send our color to the server so it can replicate to the host
+		if (myColor.has_value() && GetContext().network && GetContext().network->IsClient())
 		{
-			auto& cfg = PlayerBindingConfig::GetInstance();
-			auto myColor = cfg.GetPlayerColor(0);
-			if (myColor.has_value() && GetContext().network && GetContext().network->IsClient())
-			{
-				sf::Packet cp;
-				cp << static_cast<std::uint8_t>(Client::PacketType::kPlayerColorSync)
-				   << aircraftId
-				   << myColor->r
-				   << myColor->g
-				   << myColor->b;
-				GetContext().network->SendGameplayPacket(cp);
-			}
+			sf::Packet cp;
+			cp << static_cast<std::uint8_t>(Client::PacketType::kPlayerColorSync)
+				<< aircraftId
+				<< myColor->r
+				<< myColor->g
+				<< myColor->b;
+			GetContext().network->SendGameplayPacket(cp);
+			std::cout << "[MP] Sent kPlayerColorSync id=" << (int)aircraftId
+				<< " rgb=(" << (int)myColor->r << "," << (int)myColor->g << "," << (int)myColor->b << ")\n";
 		}
 	}
 	break;
@@ -504,12 +543,44 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 
 		const sf::Color color(r, g, b);
 
-		// Store in global config so it survives round resets
-		PlayerBindingConfig::GetInstance().SetPlayerColor(
-			static_cast<int>(id), color);
+		std::cout << "[MP] kPlayerColorSync id=" << (int)id
+			<< " rgb=(" << (int)r << "," << (int)g << "," << (int)b << ")\n";
 
-		// Apply immediately to the live aircraft
+		// Store in global config keyed by network ID
+		PlayerBindingConfig::GetInstance().SetPlayerColor(static_cast<int>(id), color);
+
+		// Apply to remote network actor if it exists
 		m_world.SetNetworkActorColor(id, color);
+
+		// If this is our own ID (host receiving its own sync-back, or any echo),
+		// also apply to local physics player so colors are consistent
+		auto it = m_local_player_to_aircraft_id.begin();
+		for (; it != m_local_player_to_aircraft_id.end(); ++it)
+		{
+			if (it->second == id)
+			{
+				Aircraft* a = m_world.GetPlayerAircraft(it->first);
+				if (a) a->SetPlayerColor(color);
+				break;
+			}
+		}
+	}
+	break;
+	case Server::PacketType::kSpawnProjectile:
+	{
+		std::uint8_t ownerId = 0;
+		float x = 0.f, y = 0.f, vx = 0.f, vy = 0.f;
+		if (!(packet >> ownerId >> x >> y >> vx >> vy))
+			return;
+
+		// Don't spawn a ghost bullet for our own shots (we already spawned it locally)
+		if (IsKnownLocalNetworkId(ownerId))
+			return;
+
+		std::cout << "[MP] kSpawnProjectile owner=" << (int)ownerId
+			<< " pos=(" << x << "," << y << ") vel=(" << vx << "," << vy << ")\n";
+
+		m_world.SpawnNetworkProjectile(ownerId, { x, y }, { vx, vy });
 	}
 	break;
 
@@ -543,19 +614,21 @@ void MultiplayerGameState::OnRemotePlayerConnected(std::uint8_t networkId, float
 	m_known_remote_network_ids.insert(networkId);
 	++m_perf.remote_connects;
 
-	//Use the lobby-chosen color for this remote player if available
-	sf::Color tint = sf::Color::Cyan; //fallback
+	// Use the lobby-chosen color for this remote player if available.
+	// NOTE: color may not have arrived yet if kPlayerColorSync is in-flight —
+	// SetNetworkActorColor() will correct it when that packet lands.
+	sf::Color tint = sf::Color::Cyan; // visible fallback
 	auto& config = PlayerBindingConfig::GetInstance();
 	auto remoteColor = config.GetPlayerColor(static_cast<int>(networkId));
 	if (remoteColor.has_value())
-	{
 		tint = remoteColor.value();
-	}
 
 	m_world.SpawnNetworkActor(networkId, { x, y }, tint);
 
 	std::cout << "[MP] Remote player connected: id=" << static_cast<int>(networkId)
-		<< " pos=(" << x << ", " << y << ")\n";
+		<< " pos=(" << x << ", " << y << ")"
+		<< " color=(" << (int)tint.r << "," << (int)tint.g << "," << (int)tint.b << ")"
+		<< " (from_config=" << remoteColor.has_value() << ")\n";
 }
 
 void MultiplayerGameState::OnRemotePlayerDisconnected(std::uint8_t networkId)
