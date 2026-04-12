@@ -613,31 +613,21 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 		std::cout << "[MP] kPlayerColorSync id=" << (int)id
 			<< " rgb=(" << (int)r << "," << (int)g << "," << (int)b << ")\n";
 
-		// Always store under the network ID so OnRemotePlayerConnected picks it up
+		// Store in global config keyed by network ID
 		PlayerBindingConfig::GetInstance().SetPlayerColor(static_cast<int>(id), color);
 
-		// Apply to remote actor if it already exists
+		// Apply to remote network actor if it exists
 		m_world.SetNetworkActorColor(id, color);
 
-		// Apply to local physics actor if this ID belongs to us
-		for (auto it = m_local_player_to_aircraft_id.begin();
-			it != m_local_player_to_aircraft_id.end(); ++it)
+		// If this is our own ID (host receiving its own sync-back, or any echo),
+		// also apply to local physics player so colors are consistent
+		auto it = m_local_player_to_aircraft_id.begin();
+		for (; it != m_local_player_to_aircraft_id.end(); ++it)
 		{
 			if (it->second == id)
 			{
 				Aircraft* a = m_world.GetPlayerAircraft(it->first);
 				if (a) a->SetPlayerColor(color);
-				break;
-			}
-		}
-
-		// Also update slot 0 in config if this is our own ID — ensures
-		// any late re-apply always has the right local color at index 0
-		for (const auto& kv : m_local_player_to_aircraft_id)
-		{
-			if (kv.second == id)
-			{
-				PlayerBindingConfig::GetInstance().SetPlayerColor(0, color);
 				break;
 			}
 		}
@@ -691,10 +681,13 @@ void MultiplayerGameState::OnRemotePlayerConnected(std::uint8_t networkId, float
 	m_known_remote_network_ids.insert(networkId);
 	++m_perf.remote_connects;
 
-	// Try to use the color already stored for this network ID.
-	// After Fix 1 in BindingState, remote colors are stored under their
-	// lobby index (= network ID) before the game starts, so this will hit.
+	// Spawn with white — kPlayerColorSync arrives immediately after and applies
+	// the real color. Using a stale config value here causes the wrong color to
+	// briefly (or permanently) show when the sync packet hasn't arrived yet.
 	sf::Color tint = sf::Color::White;
+
+	// Use config color only if it's already been stored under the correct network ID
+	// (i.e. a prior kPlayerColorSync already arrived for this ID)
 	auto remoteColor = PlayerBindingConfig::GetInstance().GetPlayerColor(
 		static_cast<int>(networkId));
 	if (remoteColor.has_value())

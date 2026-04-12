@@ -329,32 +329,18 @@ bool BindingState::Update(sf::Time dt)
 
 		if (GetContext().network->ConsumeStartGameSignal())
 		{
-			auto& config = PlayerBindingConfig::GetInstance();
-			config.SetPlayerCount(GetJoinedPlayerCount());
-
-			// In network mode the lobby player index IS the network aircraft ID:
-			// host = 0, client = 1 (assigned by server).
-			// Save the LOCAL player's color under slot 0 (local physics slot),
-			// and separately record it under the actual lobby index so the
-			// kPlayerColorSync path can look it up by network ID.
-			const int localIdx = m_local_player_index;
-			const int localColor = m_player_slots[localIdx].GetSelectedColorIndex();
-			if (localColor >= 0 && localColor < static_cast<int>(m_all_colors.size()))
+			//Save all player colors to config before transitioning
 			{
-				// Slot 0 = "my own color" — always what MultiplayerGameState reads
-				config.SetPlayerColor(0, m_all_colors[localColor]);
-				// Also store under the actual lobby/network index for kPlayerColorSync lookup
-				if (localIdx != 0)
-					config.SetPlayerColor(localIdx, m_all_colors[localColor]);
-			}
-
-			// Save remote players' colors under their lobby indices (= network IDs)
-			for (int j = 0; j < GetJoinedPlayerCount(); ++j)
-			{
-				if (j == localIdx) continue;   // already saved above
-				int colorIdx = m_player_slots[j].GetSelectedColorIndex();
-				if (colorIdx >= 0 && colorIdx < static_cast<int>(m_all_colors.size()))
-					config.SetPlayerColor(j, m_all_colors[colorIdx]);
+				auto& config = PlayerBindingConfig::GetInstance();
+				config.SetPlayerCount(GetJoinedPlayerCount());
+				for (int j = 0; j < GetJoinedPlayerCount(); ++j)
+				{
+					int colorIdx = m_player_slots[j].GetSelectedColorIndex();
+					if (colorIdx >= 0 && colorIdx < static_cast<int>(m_all_colors.size()))
+					{
+						config.SetPlayerColor(j, m_all_colors[colorIdx]);
+					}
+				}
 			}
 
 			RequestStackPop();
