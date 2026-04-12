@@ -451,19 +451,37 @@ bool NetworkSession::PollGameplayPacket(sf::Packet& outPacket)
 		return false;
 	}
 
-	// Host path: synthesize a kUpdateClientState packet from server state
+	// Host path: first drain host events (connect/disconnect), then snapshot
 	if (m_mode == NetworkMode::kHost && m_server)
 	{
+		// Priority: deliver connect/disconnect events before state snapshots
+		GameServer::HostEvent event;
+		if (m_server->PollHostEvent(event))
+		{
+			outPacket.clear();
+			if (event.type == GameServer::HostEvent::kConnect)
+			{
+				outPacket << static_cast<std::uint8_t>(Server::PacketType::kPlayerConnect);
+				outPacket << event.aircraft_id << event.x << event.y;
+			}
+			else
+			{
+				outPacket << static_cast<std::uint8_t>(Server::PacketType::kPlayerDisconnect);
+				outPacket << event.aircraft_id;
+			}
+			return true;
+		}
+
+		// Then synthesize kUpdateClientState from server state
 		std::vector<GameServer::NetAircraftState> states;
 		m_server->CopyAircraftStates(states);
 
-		// no data -> no packet
 		if (states.empty())
 			return false;
 
 		outPacket.clear();
 		outPacket << static_cast<std::uint8_t>(Server::PacketType::kUpdateClientState);
-		outPacket << 0.f; // worldScroll placeholder for host-local readback
+		outPacket << 0.f; // worldScroll placeholder
 		outPacket << static_cast<std::uint8_t>(states.size());
 
 		for (const auto& s : states)

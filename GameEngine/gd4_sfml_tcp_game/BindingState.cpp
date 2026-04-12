@@ -329,6 +329,20 @@ bool BindingState::Update(sf::Time dt)
 
 		if (GetContext().network->ConsumeStartGameSignal())
 		{
+			//Save all player colors to config before transitioning
+			{
+				auto& config = PlayerBindingConfig::GetInstance();
+				config.SetPlayerCount(GetJoinedPlayerCount());
+				for (int j = 0; j < GetJoinedPlayerCount(); ++j)
+				{
+					int colorIdx = m_player_slots[j].GetSelectedColorIndex();
+					if (colorIdx >= 0 && colorIdx < static_cast<int>(m_all_colors.size()))
+					{
+						config.SetPlayerColor(j, m_all_colors[colorIdx]);
+					}
+				}
+			}
+
 			RequestStackPop();
 			RequestStackPush(StateID::kMultiplayerGame);
 			return false;
@@ -432,6 +446,20 @@ bool BindingState::HandleEvent(const sf::Event& event)
 				{
 					if (GetContext().network->IsHosting())
 					{
+						//Save all player colors to config before transitioning
+						{
+							auto& config = PlayerBindingConfig::GetInstance();
+							config.SetPlayerCount(GetJoinedPlayerCount());
+							for (int j = 0; j < GetJoinedPlayerCount(); ++j)
+							{
+								int colorIdx = m_player_slots[j].GetSelectedColorIndex();
+								if (colorIdx >= 0 && colorIdx < static_cast<int>(m_all_colors.size()))
+								{
+									config.SetPlayerColor(j, m_all_colors[colorIdx]);
+								}
+							}
+						}
+
 						GetContext().network->SendLobbyStartGame();
 						GetContext().sounds->Play(SoundEffect::kStartGame);
 

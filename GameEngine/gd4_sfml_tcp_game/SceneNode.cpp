@@ -184,8 +184,8 @@ void SceneNode::draw(sf::RenderTarget& target, sf::RenderStates states) const
     //Draw the node and its children with the changed transform
     DrawCurrent(target, states);
     DrawChildren(target, states);
-    sf::FloatRect rect = GetBoundingRect();
-    DrawBoundingRect(target, states, rect);
+    //sf::FloatRect rect = GetBoundingRect();
+    //DrawBoundingRect(target, states, rect);
 }
 
 void SceneNode::DrawCurrent(sf::RenderTarget& target, sf::RenderStates states) const
@@ -213,7 +213,9 @@ void SceneNode::CheckNodeCollision(SceneNode& node, std::set<Pair>& collision_pa
         const unsigned int myCategory = GetCategory();
         const unsigned int otherCategory = node.GetCategory();
 
-        if (CanPotentiallyCollide(myCategory, otherCategory) && Collision(*this, node))
+        //Skip checks involving non-collidable nodes early
+        if (myCategory != 0 && otherCategory != 0 &&
+            CanPotentiallyCollide(myCategory, otherCategory) && Collision(*this, node))
         {
             collision_pairs.insert(std::minmax(this, &node));
         }

@@ -7,6 +7,7 @@
 #include "PickupType.hpp"
 #include <iostream>
 
+// --- In the constructor, after the existing init, register host aircraft (ID 0) ---
 GameServer::GameServer(sf::Vector2f battlefield_size)
     : m_thread()
     , m_listening_state(false)
@@ -25,6 +26,16 @@ GameServer::GameServer(sf::Vector2f battlefield_size)
 {
     m_listener_socket.setBlocking(false);
     m_peers[0].reset(new RemotePeer);
+
+    // Register the host's own aircraft as ID 0
+    // m_aircraft_identifier_counter starts at 1, so client IDs won't conflict
+    m_aircraft_info[0].m_position = sf::Vector2f(
+        m_battlefield_rect.size.x / 2.f,
+        m_battlefield_rect.position.y + m_battlefield_rect.size.y / 2.f
+    );
+    m_aircraft_info[0].m_hitpoints = 100;
+    m_aircraft_info[0].m_missile_ammo = 2;
+    m_aircraft_count = 1;
 
     m_thread = std::thread(&GameServer::ExecutionThread, this);
 }
@@ -450,11 +461,32 @@ void GameServer::HandleIncomingConnections()
         m_peers[m_connected_players]->m_ready = true;
         m_peers[m_connected_players]->m_last_packet_time = Now();
 
-        //Send assigned index BEFORE incrementing m_connected_players
+        // Send assigned index
         sf::Packet assignedPacket;
         assignedPacket << static_cast<std::uint8_t>(Server::PacketType::kLobbyAssignedIndex);
         assignedPacket << static_cast<std::uint8_t>(assignedLobbyIndex);
         m_peers[m_connected_players]->m_socket.send(assignedPacket);
+
+        //Send host aircraft info to the new client
+        {
+            sf::Packet hostInfoPacket;
+            hostInfoPacket << static_cast<uint8_t>(Server::PacketType::kPlayerConnect);
+            hostInfoPacket << static_cast<uint8_t>(0)
+                << m_aircraft_info[0].m_position.x
+                << m_aircraft_info[0].m_position.y;
+            m_peers[m_connected_players]->m_socket.send(hostInfoPacket);
+        }
+
+        //Notify host about this new client
+        {
+            uint8_t newClientId = static_cast<uint8_t>(m_aircraft_identifier_counter - 1);
+            PushHostEvent({
+                HostEvent::kConnect,
+                newClientId,
+                m_aircraft_info[newClientId].m_position.x,
+                m_aircraft_info[newClientId].m_position.y
+            });
+        }
 
         {
             std::scoped_lock lock(m_lobby_mutex);
@@ -501,6 +533,9 @@ void GameServer::HandleDisconnections()
             {
                 SendToAll((sf::Packet() << static_cast<uint8_t>(Server::PacketType::kPlayerDisconnect) << identifer));
                 m_aircraft_info.erase(identifer);
+
+                //Notify host about disconnection
+                PushHostEvent({ HostEvent::kDisconnect, identifer, 0.f, 0.f });
             }
 
             m_connected_players--;
@@ -761,4 +796,28 @@ void GameServer::CopyAircraftStates(std::vector<NetAircraftState>& outStates) co
         s.ammo = kv.second.m_missile_ammo;
         outStates.push_back(s);
     }
+}
+
+void GameServer::UpdateHostAircraftState(const sf::Vector2f& pos, uint8_t hp, uint8_t ammo)
+{
+    m_aircraft_info[0].m_position = pos;
+    m_aircraft_info[0].m_hitpoints = hp;
+    m_aircraft_info[0].m_missile_ammo = ammo;
+}
+
+void GameServer::PushHostEvent(const HostEvent& event)
+{
+    std::scoped_lock lock(m_host_event_mutex);
+    m_host_events.push_back(event);
+}
+
+bool GameServer::PollHostEvent(HostEvent& outEvent)
+{
+    std::scoped_lock lock(m_host_event_mutex);
+    if (m_host_events.empty())
+        return false;
+
+    outEvent = m_host_events.front();
+    m_host_events.pop_front();
+    return true;
 }

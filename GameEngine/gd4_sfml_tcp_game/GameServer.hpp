@@ -47,6 +47,17 @@ public:
 
 	void CopyAircraftStates(std::vector<NetAircraftState>& outStates) const;
 
+	struct HostEvent
+	{
+		enum Type { kConnect, kDisconnect };
+		Type type;
+		uint8_t aircraft_id;
+		float x, y;
+	};
+
+	void UpdateHostAircraftState(const sf::Vector2f& pos, uint8_t hp, uint8_t ammo);
+	bool PollHostEvent(HostEvent& outEvent);
+
 private:
 	struct RemotePeer
 	{
@@ -90,6 +101,8 @@ private:
 	int FindFreeLobbyPlayerIndex() const;
 	void EnsureHostLobbyState();
 
+	void PushHostEvent(const HostEvent& event);
+
 private:
 	std::thread m_thread;
 	sf::Clock m_clock;
@@ -121,4 +134,7 @@ private:
 	std::deque<int> m_lobby_leave_events;
 
 	std::map<int, std::tuple<int, bool, bool>> m_lobby_state;
+
+	std::mutex m_host_event_mutex;
+	std::deque<HostEvent> m_host_events;
 };

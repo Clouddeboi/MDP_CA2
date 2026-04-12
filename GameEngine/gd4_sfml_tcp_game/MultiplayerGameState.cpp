@@ -16,41 +16,33 @@ MultiplayerGameState::MultiplayerGameState(StateStack& stack, Context context)
 		*context.window,
 		*context.fonts,
 		*context.sounds,
-		std::max(2, PlayerBindingConfig::GetInstance().GetPlayerCount())
+		1  // Only 1 local aircraft per machine; remotes are network actors
 	)
 	, m_players()
 	, m_sounds(*context.sounds)
 {
-	//Play the music
 	context.music->Play(MusicThemes::kMissionTheme);
 
 	auto& config = PlayerBindingConfig::GetInstance();
 
-	//In network gameplay, this machine controls one local player by default.
-	int player_count = (context.network && context.network->IsActive())
-		? 1
-		: std::max(1, std::min(config.GetPlayerCount(), PlayerBindingConfig::GetMaxPlayers()));
+	// Every machine controls exactly 1 local player (always local slot 0)
+	m_players.emplace_back(0);
 
-	for (int i = 0; i < player_count; ++i)
+	auto device = config.GetPlayerDevice(0);
+	if (device.has_value() && device->type == InputDeviceType::kController)
+		m_players[0].SetJoystickId(device->deviceIndex);
+	else
+		m_players[0].SetJoystickId(-1);
+
+	const bool isHost = (GetContext().network && GetContext().network->IsHosting());
+
+	// Host self-assigns aircraft ID 0
+	if (isHost)
 	{
-		m_players.emplace_back(i);
-
-		auto device = config.GetPlayerDevice(i);
-		if (device.has_value())
-		{
-			if (device->type == InputDeviceType::kController)
-				m_players[i].SetJoystickId(device->deviceIndex);
-			else
-				m_players[i].SetJoystickId(-1);
-		}
-		else
-		{
-			m_players[i].SetJoystickId(-1);
-		}
+		m_local_player_to_aircraft_id[0] = 0;
+		m_net_to_local_player_index[0] = 0;
 	}
 
-	RebuildNetworkPlayerMap();
-	const bool isHost = (GetContext().network && GetContext().network->IsHosting());
 	m_world.SetCollisionEnabled(isHost);
 }
 
@@ -61,7 +53,7 @@ void MultiplayerGameState::Draw()
 
 bool MultiplayerGameState::Update(sf::Time dt)
 {
-   sf::Clock update_timer;
+	sf::Clock update_timer;
 	m_perf.sample_window += dt;
 	++m_perf.frames;
 
@@ -72,44 +64,25 @@ bool MultiplayerGameState::Update(sf::Time dt)
 		m_perf.net_poll_time_total += section_timer.getElapsedTime();
 	}
 
- sf::Clock world_timer;
+	sf::Clock world_timer;
 	m_world.Update(dt);
 	m_perf.world_update_time_total += world_timer.getElapsedTime();
 
+	// --- Apply snapshots: only update REMOTE actors, never overwrite local ---
 	if (m_has_new_snapshot)
 	{
 		sf::Clock snapshot_timer;
 
 		for (const auto& s : m_latest_snapshot)
 		{
-			// Local actor path (owned by this machine)
+			// Skip our own aircraft — local physics is authoritative
 			if (IsKnownLocalNetworkId(s.id))
-			{
-				auto it = m_net_to_local_player_index.find(s.id);
-				if (it == m_net_to_local_player_index.end())
-					continue;
-
-				const int playerIdx = it->second;
-				Aircraft* a = m_world.GetPlayerAircraft(playerIdx);
-				if (!a)
-					continue;
-
-				a->setPosition({ s.x, s.y });
-
-				const int currentHp = a->GetHitPoints();
-				if (s.hp < static_cast<std::uint8_t>(currentHp))
-					a->Damage(currentHp - static_cast<int>(s.hp));
-				else if (s.hp > static_cast<std::uint8_t>(currentHp))
-					a->Repair(static_cast<int>(s.hp) - currentHp);
-
 				continue;
-			}
 
-			// Unknown ids are ignored unless already known as remote players
+			// Only update known remote actors
 			if (m_known_remote_network_ids.find(s.id) == m_known_remote_network_ids.end())
 				continue;
 
-			// Remote interpolation path
 			auto& interp = m_remote_interp[s.id];
 			if (!interp.initialized)
 			{
@@ -134,9 +107,7 @@ bool MultiplayerGameState::Update(sf::Time dt)
 	if (m_world.ShouldReturnToMenu())
 	{
 		if (GetContext().music)
-		{
 			GetContext().music->Stop();
-		}
 		RequestStackClear();
 		RequestStackPush(StateID::kMenu);
 		return false;
@@ -144,12 +115,10 @@ bool MultiplayerGameState::Update(sf::Time dt)
 
 	CommandQueue& commands = m_world.GetCommandQueue();
 
-	//Handle input for all players
 	for (size_t i = 0; i < m_players.size(); ++i)
 	{
 		m_players[i].HandleRealTimeInput(commands);
 
-		//Handle aiming for each player
 		sf::Vector2f aim = m_players[i].GetJoystickAim();
 		const float kAimDeadzone = 0.2f;
 
@@ -159,7 +128,6 @@ bool MultiplayerGameState::Update(sf::Time dt)
 		}
 		else
 		{
-			//Only use mouse aiming if player doesn't have a controller
 			if (i == 0 && m_players[i].GetJoystickId() < 0)
 			{
 				m_world.AimPlayerAtMouse(static_cast<int>(i));
@@ -167,106 +135,116 @@ bool MultiplayerGameState::Update(sf::Time dt)
 		}
 	}
 
+	// --- State updates: BOTH host and client send position to server ---
 	m_state_send_timer += dt;
-    m_state_force_send_timer += dt;
-	if (GetContext().network && GetContext().network->IsClient() && m_state_send_timer >= m_state_send_interval)
+	m_state_force_send_timer += dt;
+
+	if (GetContext().network && GetContext().network->IsActive() && m_state_send_timer >= m_state_send_interval)
 	{
 		m_state_send_timer = sf::Time::Zero;
-
-		sf::Packet p;
-		p << static_cast<std::uint8_t>(Client::PacketType::kStateUpdate);
-
-        std::vector<std::uint8_t> changed_ids;
-		changed_ids.reserve(m_players.size());
-
 		const bool force_send = m_state_force_send_timer >= m_state_force_send_interval;
 
-		for (size_t i = 0; i < m_players.size(); ++i)
+		// HOST path: update server directly (no TCP socket)
+		if (GetContext().network->IsHosting())
 		{
-         auto idIt = m_local_player_to_aircraft_id.find(static_cast<int>(i));
-			if (idIt == m_local_player_to_aircraft_id.end())
-				continue;
-
-			Aircraft* a = m_world.GetPlayerAircraft(static_cast<int>(i));
-          if (!a)
-				continue;
-
-			const std::uint8_t aircraft_identifier = idIt->second;
-			const sf::Vector2f pos = a->getPosition();
-			const std::uint8_t hp = static_cast<std::uint8_t>(std::max(0, std::min(255, a->GetHitPoints())));
-			const std::uint8_t ammo = 0;
-
-			auto& last = m_last_sent_local_states[aircraft_identifier];
-			const float dx = pos.x - last.position.x;
-			const float dy = pos.y - last.position.y;
-			const float moved_sq = dx * dx + dy * dy;
-
-			const bool changed = !last.initialized
-				|| moved_sq >= 4.f
-				|| hp != last.hp
-				|| ammo != last.ammo
-				|| force_send;
-
-			if (changed)
+			Aircraft* a = m_world.GetPlayerAircraft(0);
+			if (a)
 			{
-				changed_ids.push_back(aircraft_identifier);
+				const sf::Vector2f pos = a->getPosition();
+				const uint8_t hp = static_cast<uint8_t>(std::max(0, std::min(255, a->GetHitPoints())));
+				const uint8_t ammo = 0;
+
+				auto* server = GetContext().network->GetServer();
+				if (server)
+					server->UpdateHostAircraftState(pos, hp, ammo);
 			}
 		}
-
-        p << static_cast<std::uint8_t>(changed_ids.size());
-
-        for (std::uint8_t aircraft_identifier : changed_ids)
+		// CLIENT path: send via TCP (existing logic)
+		else if (GetContext().network->IsClient())
 		{
-			int localSlot = -1;
-			for (const auto& kv : m_local_player_to_aircraft_id)
+			sf::Packet p;
+			p << static_cast<std::uint8_t>(Client::PacketType::kStateUpdate);
+
+			std::vector<std::uint8_t> changed_ids;
+			changed_ids.reserve(m_players.size());
+
+			for (size_t i = 0; i < m_players.size(); ++i)
 			{
-				if (kv.second == aircraft_identifier)
+				auto idIt = m_local_player_to_aircraft_id.find(static_cast<int>(i));
+				if (idIt == m_local_player_to_aircraft_id.end())
+					continue;
+
+				Aircraft* a = m_world.GetPlayerAircraft(static_cast<int>(i));
+				if (!a)
+					continue;
+
+				const std::uint8_t aircraft_identifier = idIt->second;
+				const sf::Vector2f pos = a->getPosition();
+				const std::uint8_t hp = static_cast<std::uint8_t>(std::max(0, std::min(255, a->GetHitPoints())));
+				const std::uint8_t ammo = 0;
+
+				auto& last = m_last_sent_local_states[aircraft_identifier];
+				const float dx = pos.x - last.position.x;
+				const float dy = pos.y - last.position.y;
+				const float moved_sq = dx * dx + dy * dy;
+
+				const bool changed = !last.initialized
+					|| moved_sq >= 4.f
+					|| hp != last.hp
+					|| ammo != last.ammo
+					|| force_send;
+
+				if (changed)
+					changed_ids.push_back(aircraft_identifier);
+			}
+
+			p << static_cast<std::uint8_t>(changed_ids.size());
+
+			for (std::uint8_t aircraft_identifier : changed_ids)
+			{
+				int localSlot = -1;
+				for (const auto& kv : m_local_player_to_aircraft_id)
 				{
-					localSlot = kv.first;
-					break;
+					if (kv.second == aircraft_identifier)
+					{
+						localSlot = kv.first;
+						break;
+					}
 				}
+				if (localSlot < 0)
+					continue;
+
+				Aircraft* a = m_world.GetPlayerAircraft(localSlot);
+				if (!a)
+					continue;
+
+				const sf::Vector2f pos = a->getPosition();
+				const std::uint8_t hp = static_cast<std::uint8_t>(std::max(0, std::min(255, a->GetHitPoints())));
+				const std::uint8_t ammo = 0;
+
+				p << aircraft_identifier << pos.x << pos.y << hp << ammo;
+
+				auto& last = m_last_sent_local_states[aircraft_identifier];
+				last.position = pos;
+				last.hp = hp;
+				last.ammo = ammo;
+				last.initialized = true;
 			}
 
-			if (localSlot < 0)
-				continue;
-
-			Aircraft* a = m_world.GetPlayerAircraft(localSlot);
-
-			if (!a)
-				continue;
-
-			const sf::Vector2f pos = a->getPosition();
-			const std::uint8_t hp = static_cast<std::uint8_t>(std::max(0, std::min(255, a->GetHitPoints())));
-			const std::uint8_t ammo = 0;
-
-			p << aircraft_identifier
-				<< pos.x
-				<< pos.y
-				<< hp
-				<< ammo;
-
-			auto& last = m_last_sent_local_states[aircraft_identifier];
-			last.position = pos;
-			last.hp = hp;
-			last.ammo = ammo;
-			last.initialized = true;
-		}
-
-        if (!changed_ids.empty() || force_send)
-		{
-			GetContext().network->SendGameplayPacket(p);
-			++m_perf.tx_packets;
-			m_perf.tx_bytes += p.getDataSize();
+			if (!changed_ids.empty() || force_send)
+			{
+				GetContext().network->SendGameplayPacket(p);
+				++m_perf.tx_packets;
+				m_perf.tx_bytes += p.getDataSize();
+			}
 		}
 
 		if (force_send)
-		{
 			m_state_force_send_timer = sf::Time::Zero;
-		}
 	}
 
-	//Smooth remote actor movement
-    sf::Clock interp_timer;
+	// Smooth remote actor movement
+	sf::Clock interp_timer;
 	for (auto& kv : m_remote_interp)
 	{
 		const std::uint8_t id = kv.first;
@@ -276,7 +254,7 @@ bool MultiplayerGameState::Update(sf::Time dt)
 			continue;
 
 		const sf::Vector2f delta = st.target - st.current;
-		const float lerpFactor = std::min(1.f, dt.asSeconds() * 12.f);//Smoothing speed
+		const float lerpFactor = std::min(1.f, dt.asSeconds() * 12.f);
 		st.current += delta * lerpFactor;
 
 		m_world.UpdateNetworkActorState(id, st.current, st.hp, st.ammo);
@@ -290,7 +268,7 @@ bool MultiplayerGameState::Update(sf::Time dt)
 		return false;
 	}
 
-    m_perf.update_time_total += update_timer.getElapsedTime();
+	m_perf.update_time_total += update_timer.getElapsedTime();
 
 	if (m_perf.sample_window >= sf::seconds(1.f))
 	{
@@ -509,8 +487,18 @@ void MultiplayerGameState::OnRemotePlayerConnected(std::uint8_t networkId, float
 		return;
 
 	m_known_remote_network_ids.insert(networkId);
-    ++m_perf.remote_connects;
-	m_world.SpawnNetworkActor(networkId, { x, y }, sf::Color::Cyan);
+	++m_perf.remote_connects;
+
+	//Use the lobby-chosen color for this remote player if available
+	sf::Color tint = sf::Color::Cyan; //fallback
+	auto& config = PlayerBindingConfig::GetInstance();
+	auto remoteColor = config.GetPlayerColor(static_cast<int>(networkId));
+	if (remoteColor.has_value())
+	{
+		tint = remoteColor.value();
+	}
+
+	m_world.SpawnNetworkActor(networkId, { x, y }, tint);
 
 	std::cout << "[MP] Remote player connected: id=" << static_cast<int>(networkId)
 		<< " pos=(" << x << ", " << y << ")\n";
