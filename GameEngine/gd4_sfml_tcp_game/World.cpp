@@ -273,6 +273,18 @@ void World::UpdateCameraZoom(sf::Time dt)
 		Aircraft* actor = kv.second;
 		if (!actor || actor->IsDestroyed())
 			continue;
+
+		const sf::Vector2f pos = actor->getPosition();
+		const bool inBounds =
+			pos.x >= m_camera_play_bounds.position.x &&
+			pos.x <= m_camera_play_bounds.position.x + m_camera_play_bounds.size.x &&
+			pos.y >= m_camera_play_bounds.position.y &&
+			pos.y <= m_camera_play_bounds.position.y + m_camera_play_bounds.size.y;
+
+		if (!inBounds)
+			continue; // Skip until first snapshot puts them in a real position
+
+		// Skip if already added via m_player_aircrafts
 		bool alreadyAdded = false;
 		for (Aircraft* p : alive_players)
 			if (p == actor) { alreadyAdded = true; break; }
@@ -281,7 +293,7 @@ void World::UpdateCameraZoom(sf::Time dt)
 	}
 
 	if (alive_players.empty())
-		return;
+		return;		
 
 	sf::Vector2f camera_target;
 	float target_zoom;
@@ -1993,8 +2005,6 @@ void World::SpawnNetworkActor(std::uint8_t networkId, const sf::Vector2f& positi
 
 	if (slotOccupiedByLocal)
 	{
-		// Still track in m_network_actors so snapshot interpolation works.
-		// Create a free-floating actor that is NOT registered in m_player_aircrafts.
 		std::unique_ptr<Aircraft> actor(new Aircraft(AircraftType::kEagle, m_textures, m_fonts, playerSlot));
 		Aircraft* actorPtr = actor.get();
 
@@ -2005,7 +2015,26 @@ void World::SpawnNetworkActor(std::uint8_t networkId, const sf::Vector2f& positi
 
 		m_scene_layers[static_cast<int>(SceneLayers::kUpperAir)]->AttachChild(std::move(actor));
 		m_network_actors[networkId] = actorPtr;
-		// Do NOT write m_player_aircrafts[playerSlot] — the local aircraft stays there.
+
+		// Add a score display for this remote player if one doesn't exist yet
+		if (playerSlot >= static_cast<int>(m_score_displays.size()))
+		{
+			const float score_text_size = 2.f;
+			const float score_spacing = 60.f;
+			std::string* score_text = new std::string("0");
+			std::unique_ptr<TextNode> score_display(new TextNode(m_fonts, *score_text));
+			score_display->setPosition({ 20.f, 20.f + (playerSlot * score_spacing) });
+			score_display->setScale({ score_text_size, score_text_size });
+			score_display->SetColor(tint);
+			score_display->SetOutlineColor(sf::Color::Black);
+			score_display->SetOutlineThickness(3.f);
+			m_score_displays.push_back(score_display.get());
+			m_scene_layers[static_cast<int>(SceneLayers::kUI)]->AttachChild(std::move(score_display));
+		}
+
+		// Ensure m_player_scores has a slot for this player
+		while (static_cast<int>(m_player_scores.size()) <= playerSlot)
+			m_player_scores.push_back(0);
 
 		std::cout << "[MP] SpawnNetworkActor id=" << static_cast<int>(networkId)
 			<< " slot=" << playerSlot << " (slot occupied by local -- floating actor only)\n";
