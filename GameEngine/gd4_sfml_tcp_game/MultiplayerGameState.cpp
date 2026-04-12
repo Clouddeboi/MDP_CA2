@@ -410,17 +410,50 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 		if (!(packet >> aircraftId >> x >> y))
 			return;
 
-		// Map local slot 0 (the one aircraft we built) to the server-assigned ID.
 		m_local_player_to_aircraft_id[0] = aircraftId;
 		m_net_to_local_player_index[aircraftId] = 0;
-
-		// Tell the world what network ID this machine owns.
-		// World::SetLocalNetworkId repositions the local aircraft to spawn[aircraftId]
-		// and stores the ID so future respawns use the right slot.
 		m_world.SetLocalNetworkId(static_cast<int>(aircraftId));
 
 		std::cout << "[MP] kSpawnSelf: local aircraft id=" << static_cast<int>(aircraftId)
 			<< " server pos=(" << x << ", " << y << ")\n";
+
+		// Immediately push corrected spawn position to server so the host
+		// doesn't render us at the old battlefield-center spawn.
+		if (GetContext().network && GetContext().network->IsClient())
+		{
+			Aircraft* a = m_world.GetPlayerAircraft(0);
+			if (a)
+			{
+				const sf::Vector2f pos = a->getPosition();
+				const std::uint8_t hp = static_cast<std::uint8_t>(
+					std::max(0, std::min(255, a->GetHitPoints())));
+				const std::uint8_t anim = m_world.GetLocalPlayerAnimState(0);
+
+				sf::Packet p;
+				p << static_cast<std::uint8_t>(Client::PacketType::kStateUpdate);
+				p << static_cast<std::uint8_t>(1);   // 1 aircraft
+				p << aircraftId << pos.x << pos.y << hp
+					<< static_cast<std::uint8_t>(0)    // ammo
+					<< anim;
+				GetContext().network->SendGameplayPacket(p);
+			}
+		}
+
+		// Send our lobby-chosen color to the server so it can replicate to the host
+		{
+			auto& cfg = PlayerBindingConfig::GetInstance();
+			auto myColor = cfg.GetPlayerColor(0);
+			if (myColor.has_value() && GetContext().network && GetContext().network->IsClient())
+			{
+				sf::Packet cp;
+				cp << static_cast<std::uint8_t>(Client::PacketType::kPlayerColorSync)
+				   << aircraftId
+				   << myColor->r
+				   << myColor->g
+				   << myColor->b;
+				GetContext().network->SendGameplayPacket(cp);
+			}
+		}
 	}
 	break;
 

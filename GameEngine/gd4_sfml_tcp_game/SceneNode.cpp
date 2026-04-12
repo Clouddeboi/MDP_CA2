@@ -60,6 +60,10 @@ namespace
             (HasCategory(b, ReceiverCategories::kAlliedProjectile) && HasCategory(a, ReceiverCategories::kEnemyAircraft)))
             return true;
 
+        if ((HasCategory(a, ReceiverCategories::kAlliedProjectile) && HasCategory(b, ReceiverCategories::kPlayerAircraft)) ||
+            (HasCategory(b, ReceiverCategories::kAlliedProjectile) && HasCategory(a, ReceiverCategories::kPlayerAircraft)))
+            return true;
+
         if ((HasCategory(a, ReceiverCategories::kEnemyProjectile) && HasCategory(b, ReceiverCategories::kPlayerAircraft)) ||
             (HasCategory(b, ReceiverCategories::kEnemyProjectile) && HasCategory(a, ReceiverCategories::kPlayerAircraft)))
             return true;

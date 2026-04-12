@@ -406,6 +406,32 @@ void GameServer::HandleIncomingPackets(sf::Packet& packet, RemotePeer& receiving
         }
     }
     break;
+    case Client::PacketType::kPlayerColorSync:
+    {
+        std::uint8_t id = 0, r = 255, g = 255, b = 255;
+        packet >> id >> r >> g >> b;
+
+        {
+            std::scoped_lock lock(m_aircraft_mutex);
+            m_aircraft_info[id].m_color_r = r;
+            m_aircraft_info[id].m_color_g = g;
+            m_aircraft_info[id].m_color_b = b;
+        }
+
+        // Broadcast the new color to all peers (including host via HostEvent)
+        sf::Packet out;
+        out << static_cast<uint8_t>(Server::PacketType::kPlayerColorSync)
+            << id << r << g << b;
+        SendToAll(out);
+
+        // Notify host game-side via HostEvent
+        HostEvent ev;
+        ev.type = HostEvent::kColorSync;
+        ev.aircraft_id = id;
+        ev.r = r; ev.g = g; ev.b = b;
+        PushHostEvent(ev);
+    }
+    break;
     case Client::PacketType::kLobbyLeave:
     {
         std::uint8_t clientSentIndex = 0;
@@ -498,6 +524,22 @@ void GameServer::HandleIncomingConnections()
         }
         BroadcastLobbySnapshot();
 
+        // Send all existing aircraft colors directly to the new peer
+        // (SendToAll won't reach it yet since m_connected_players not incremented)
+        {
+            std::scoped_lock lock(m_aircraft_mutex);
+            for (const auto& kv : m_aircraft_info)
+            {
+                sf::Packet cp;
+                cp << static_cast<uint8_t>(Server::PacketType::kPlayerColorSync)
+                   << kv.first
+                   << kv.second.m_color_r
+                   << kv.second.m_color_g
+                   << kv.second.m_color_b;
+                m_peers[m_connected_players]->m_socket.send(cp);
+            }
+        }
+
         m_aircraft_count++;
         m_connected_players++;
 
@@ -509,19 +551,6 @@ void GameServer::HandleIncomingConnections()
         {
             m_peers.emplace_back(PeerPtr(new RemotePeer()));
         }
-
-		// Immediately send all current player colors to the new client
-		// so their remote actors are tinted correctly.
-		for (const auto& kv : m_aircraft_info)
-		{
-			sf::Packet colorPacket;
-			colorPacket << static_cast<uint8_t>(Server::PacketType::kPlayerColorSync);
-			colorPacket << kv.first
-				<< kv.second.m_color_r
-				<< kv.second.m_color_g
-				<< kv.second.m_color_b;
-			m_peers[m_connected_players]->m_socket.send(colorPacket);
-		}
     }
 }
 
@@ -817,6 +846,7 @@ void GameServer::CopyAircraftStates(std::vector<NetAircraftState>& outStates) co
         s.position = kv.second.m_position;
         s.hp = kv.second.m_hitpoints;
         s.ammo = kv.second.m_missile_ammo;
+        s.anim = kv.second.m_anim;
         outStates.push_back(s);
     }
 }

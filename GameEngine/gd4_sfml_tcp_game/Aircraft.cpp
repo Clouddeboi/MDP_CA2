@@ -593,7 +593,7 @@ void Aircraft::UpdateCurrent(sf::Time dt, CommandQueue& commands)
 		return;
 	}
 
-	if (m_use_animations && m_current_animation)
+	if (m_use_animations && m_current_animation && IsUsingPhysics())
 	{
 		sf::Vector2f velocity = GetVelocity();
 		bool is_moving = std::abs(velocity.x) > 10.f;
@@ -637,6 +637,12 @@ void Aircraft::UpdateCurrent(sf::Time dt, CommandQueue& commands)
 			m_current_animation->Restart();
 		}
 
+		m_current_animation->Update(dt);
+	}
+	else if (m_use_animations && m_current_animation && !IsUsingPhysics())
+	{
+		// Remote actor: animation is driven entirely by SetRemoteAnimState() from snapshots.
+		// Still need to advance the clock so it doesn't freeze between snapshot ticks.
 		m_current_animation->Update(dt);
 	}
 

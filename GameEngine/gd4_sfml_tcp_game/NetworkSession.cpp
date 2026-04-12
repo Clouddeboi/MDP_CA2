@@ -453,6 +453,11 @@ bool NetworkSession::PollGameplayPacket(sf::Packet& outPacket)
 				outPacket << static_cast<std::uint8_t>(Server::PacketType::kPlayerConnect);
 				outPacket << event.aircraft_id << event.x << event.y;
 			}
+			else if (event.type == GameServer::HostEvent::kColorSync)
+			{
+				outPacket << static_cast<std::uint8_t>(Server::PacketType::kPlayerColorSync);
+				outPacket << event.aircraft_id << event.r << event.g << event.b;
+			}
 			else
 			{
 				outPacket << static_cast<std::uint8_t>(Server::PacketType::kPlayerDisconnect);
@@ -478,7 +483,7 @@ bool NetworkSession::PollGameplayPacket(sf::Packet& outPacket)
 		outPacket << static_cast<std::uint8_t>(states.size());
 
 		for (const auto& s : states)
-			outPacket << s.id << s.position.x << s.position.y << s.hp << s.ammo;
+			outPacket << s.id << s.position.x << s.position.y << s.hp << s.ammo << s.anim;
 
 		return true;
 	}

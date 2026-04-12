@@ -1975,7 +1975,7 @@ void World::SpawnNetworkActor(std::uint8_t networkId, const sf::Vector2f& positi
 		// Do NOT write m_player_aircrafts[playerSlot] — the local aircraft stays there.
 
 		std::cout << "[MP] SpawnNetworkActor id=" << static_cast<int>(networkId)
-			<< " slot=" << playerSlot << " (slot occupied by local — floating actor only)\n";
+			<< " slot=" << playerSlot << " (slot occupied by local -- floating actor only)\n";
 		return;
 	}
 

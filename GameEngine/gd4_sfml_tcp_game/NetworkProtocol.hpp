@@ -40,7 +40,8 @@ namespace Client
 		kQuit,
 		kLobbyBindingState,//int32 colorIndex, bool ready
 		kLobbyStartGameRequest,//no payload (client asks host)
-		kLobbyLeave
+		kLobbyLeave,
+		kPlayerColorSync
 	};
 }
 
