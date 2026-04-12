@@ -9,6 +9,7 @@
 #include "PlayerBindingConfig.hpp"
 #include "LevelSerializer.hpp"
 #include "TileRegistry.hpp"
+#include "NetworkSlotColor.hpp"
 #include <iostream>
 #include <ctime>  
 #include <algorithm>
@@ -683,7 +684,7 @@ void World::UpdateRoundOverlay()
 void World::SetTotalNetworkPlayerCount(int count)
 {
 	if (count <= static_cast<int>(m_player_scores.size()))
-		return; // Already enough slots
+		return;
 
 	const float score_text_size = 2.f;
 	const float score_spacing = 60.f;
@@ -697,21 +698,7 @@ void World::SetTotalNetworkPlayerCount(int count)
 		std::unique_ptr<TextNode> score_display(new TextNode(m_fonts, placeholder));
 		score_display->setPosition({ 20.f, 20.f + (i * score_spacing) });
 		score_display->setScale({ score_text_size, score_text_size });
-
-		if (i == 0)
-			score_display->SetColor(sf::Color::Red);
-		else if (i == 1)
-			score_display->SetColor(sf::Color::Yellow);
-		else
-		{
-			sf::Color c(
-				100 + (i * 30) % 155,
-				100 + (i * 50) % 155,
-				100 + (i * 70) % 155
-			);
-			score_display->SetColor(c);
-		}
-
+		score_display->SetColor(NetworkSlotColor(static_cast<std::uint8_t>(i)));
 		score_display->SetOutlineColor(sf::Color::Black);
 		score_display->SetOutlineThickness(3.f);
 		m_score_displays.push_back(score_display.get());
@@ -1287,7 +1274,7 @@ void World::BuildScene()
 				100 + (i * 50) % 155,
 				100 + (i * 70) % 155
 			);
-			score_display->SetColor(player_color);
+			score_display->SetColor(NetworkSlotColor(static_cast<std::uint8_t>(i)));  // ← palette color
 		}
 
 		score_display->SetOutlineColor(sf::Color::Black);
@@ -2078,7 +2065,7 @@ void World::SpawnNetworkActor(std::uint8_t networkId, const sf::Vector2f& positi
 	{
 		// Still track in m_network_actors so snapshot interpolation works.
 		// Create a free-floating actor that is NOT registered in m_player_aircrafts.
-		std::unique_ptr<Aircraft> actor(new Aircraft(AircraftType::kEagle, m_textures, m_fonts, playerSlot));
+		std::unique_ptr<Aircraft> actor(new Aircraft(AircraftType::kEagle, m_textures, m_fonts));
 		Aircraft* actorPtr = actor.get();
 
 		actorPtr->SetPlayerColor(tint);
