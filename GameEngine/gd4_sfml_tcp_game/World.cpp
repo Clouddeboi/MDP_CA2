@@ -269,11 +269,18 @@ void World::UpdateCameraZoom(sf::Time dt)
 			alive_positions.push_back(player->getPosition());
 	}
 
-	// Remote network actors (the other player(s) as seen by this machine)
+	std::vector<std::uint8_t> remote_ids;
+	remote_ids.reserve(m_network_actors.size());
 	for (const auto& kv : m_network_actors)
+		remote_ids.push_back(kv.first);
+
+	for (std::uint8_t id : remote_ids)
 	{
-		if (kv.second && !kv.second->IsDestroyed())
-			alive_positions.push_back(kv.second->getPosition());
+		auto it = m_network_actors.find(id);
+		if (it == m_network_actors.end()) continue;
+		Aircraft* actor = it->second;
+		if (actor && !actor->IsDestroyed())
+			alive_positions.push_back(actor->getPosition());
 	}
 
 	if (alive_positions.empty())
@@ -2175,14 +2182,16 @@ void World::RemoveNetworkActor(std::uint8_t networkId)
 	Aircraft* actor = it->second;
 	int playerSlot = static_cast<int>(networkId);
 
-	// Null out the slot in the player list — don't resize, keep score history
+	// Null the slot BEFORE destroying so any concurrent iteration sees nullptr
 	if (playerSlot < static_cast<int>(m_player_aircrafts.size()))
 		m_player_aircrafts[playerSlot] = nullptr;
 
+	// Erase from map BEFORE calling Destroy so iterators
+	// in UpdateCameraZoom etc. never see a destroyed-but-mapped pointer
+	m_network_actors.erase(it);
+
 	if (actor)
 		actor->Destroy();
-
-	m_network_actors.erase(it);
 }
 
 void World::UpdateSounds()
@@ -2425,15 +2434,14 @@ void World::SetLocalNetworkId(int networkId)
 
 void World::SetNetworkActorColor(std::uint8_t networkId, const sf::Color& color)
 {
-	// Apply to floating network actor (if it exists)
 	auto it = m_network_actors.find(networkId);
-	if (it != m_network_actors.end() && it->second)
+	if (it != m_network_actors.end() && it->second && !it->second->IsDestroyed())
 		it->second->SetPlayerColor(color);
 
-	// Also apply to the m_player_aircrafts slot if this is a non-floating remote
 	int slot = static_cast<int>(networkId);
 	if (slot < static_cast<int>(m_player_aircrafts.size())
 		&& m_player_aircrafts[slot]
+		&& !m_player_aircrafts[slot]->IsDestroyed()
 		&& !m_player_aircrafts[slot]->IsUsingPhysics())
 	{
 		m_player_aircrafts[slot]->SetPlayerColor(color);
