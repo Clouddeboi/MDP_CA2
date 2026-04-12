@@ -218,7 +218,12 @@ void World::Update(sf::Time dt)
 	m_scenegraph.Update(dt, m_command_queue);
 
 	AdaptPlayerPosition();
-	HandleCollisions();
+
+	if (m_collision_enabled)
+	{
+		HandleCollisions();
+	}
+
 	m_scenegraph.RemoveWrecks();
 
 	m_scenegraph.Update(sf::Time::Zero, m_command_queue);
@@ -490,6 +495,11 @@ int World::CountAlivePlayers() const
 		}
 	}
 	return count;
+}
+
+void World::SetCollisionEnabled(bool enabled)
+{
+	m_collision_enabled = enabled;
 }
 
 //Helper function to get the score of a player by index

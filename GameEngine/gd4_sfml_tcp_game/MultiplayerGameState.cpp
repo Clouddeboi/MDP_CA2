@@ -49,6 +49,7 @@ MultiplayerGameState::MultiplayerGameState(StateStack& stack, Context context)
 	}
 
 	RebuildNetworkPlayerMap();
+	m_world.SetCollisionEnabled(false);
 }
 
 void MultiplayerGameState::Draw()
