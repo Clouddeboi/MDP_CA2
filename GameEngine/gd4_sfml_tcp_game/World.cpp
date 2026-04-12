@@ -458,22 +458,22 @@ void World::StartNewRound()
 
 void World::RespawnPlayers()
 {
-	//Respawn each player, reset health, position, velocity, and clear forces/knockback
 	for (size_t i = 0; i < m_player_aircrafts.size(); ++i)
 	{
 		Aircraft* player = m_player_aircrafts[i];
 		if (!player)
 			continue;
 
-		int max_health = 100;
+		// Network actors are repositioned by snapshot — don't overwrite with spawn position
+		if (!player->IsUsingPhysics())
+			continue;
 
+		int max_health = 100;
 		player->Destroy();
 		player->Repair(max_health);
 
 		if (i < m_player_spawn_positions.size())
-		{
 			player->setPosition(m_player_spawn_positions[i]);
-		}
 
 		player->SetVelocity(0.f, 0.f);
 		player->ClearForces();
@@ -1928,17 +1928,51 @@ void World::SpawnNetworkActor(std::uint8_t networkId, const sf::Vector2f& positi
 	if (m_network_actors.find(networkId) != m_network_actors.end())
 		return;
 
-	//Remote actor is visual/sync driven
-	std::unique_ptr<Aircraft> actor(new Aircraft(AircraftType::kEagle, m_textures, m_fonts, -1));
+	// Determine which player slot this remote actor occupies.
+	// networkId 0 = host (already in slot 0), networkId 1 = first client (slot 1), etc.
+	int playerSlot = static_cast<int>(networkId);
+
+	// Resize player tracking structures to accommodate the new slot
+	while (static_cast<int>(m_player_aircrafts.size()) <= playerSlot)
+		m_player_aircrafts.push_back(nullptr);
+
+	while (static_cast<int>(m_player_scores.size()) <= playerSlot)
+		m_player_scores.push_back(0);
+
+	// Use player_id = playerSlot so GetCategory() returns the correct kPlayerN bitmask
+	std::unique_ptr<Aircraft> actor(new Aircraft(AircraftType::kEagle, m_textures, m_fonts, playerSlot));
 	Aircraft* actorPtr = actor.get();
 
 	actorPtr->SetPlayerColor(tint);
 	actorPtr->setPosition(position);
-	actorPtr->SetUsePhysics(false);
+	actorPtr->SetUsePhysics(false);   // physics driven by snapshot interpolation
 	actorPtr->SetVelocity(0.f, 0.f);
 
 	m_scene_layers[static_cast<int>(SceneLayers::kUpperAir)]->AttachChild(std::move(actor));
 	m_network_actors[networkId] = actorPtr;
+
+	// Register in player list so game logic (rounds, camera, scoring) sees both players
+	m_player_aircrafts[playerSlot] = actorPtr;
+
+	// Add a score display for this player if one doesn't exist yet
+	if (playerSlot >= static_cast<int>(m_score_displays.size()))
+	{
+		const float score_text_size = 2.f;
+		const float score_spacing = 60.f;
+
+		std::string* score_text = new std::string("0");
+		std::unique_ptr<TextNode> score_display(new TextNode(m_fonts, *score_text));
+		score_display->setPosition({ 20.f, 20.f + (playerSlot * score_spacing) });
+		score_display->setScale({ score_text_size, score_text_size });
+		score_display->SetColor(tint);
+		score_display->SetOutlineColor(sf::Color::Black);
+		score_display->SetOutlineThickness(3.f);
+
+		m_score_displays.push_back(score_display.get());
+		m_scene_layers[static_cast<int>(SceneLayers::kUI)]->AttachChild(std::move(score_display));
+	}
+
+	m_player_count = static_cast<int>(m_player_aircrafts.size());
 }
 
 void World::UpdateNetworkActorState(std::uint8_t networkId, const sf::Vector2f& position, std::uint8_t hp, std::uint8_t ammo)
@@ -1967,10 +2001,15 @@ void World::RemoveNetworkActor(std::uint8_t networkId)
 	if (it == m_network_actors.end())
 		return;
 
-	if (it->second)
-	{
-		it->second->Destroy();
-	}
+	Aircraft* actor = it->second;
+	int playerSlot = static_cast<int>(networkId);
+
+	// Null out the slot in the player list — don't resize, keep score history
+	if (playerSlot < static_cast<int>(m_player_aircrafts.size()))
+		m_player_aircrafts[playerSlot] = nullptr;
+
+	if (actor)
+		actor->Destroy();
 
 	m_network_actors.erase(it);
 }

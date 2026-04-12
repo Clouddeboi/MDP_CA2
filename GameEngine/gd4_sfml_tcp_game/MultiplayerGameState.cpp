@@ -43,7 +43,7 @@ MultiplayerGameState::MultiplayerGameState(StateStack& stack, Context context)
 		m_net_to_local_player_index[0] = 0;
 	}
 
-	m_world.SetCollisionEnabled(isHost);
+	m_world.SetCollisionEnabled(true);
 }
 
 void MultiplayerGameState::Draw()
