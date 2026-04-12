@@ -56,8 +56,7 @@ MultiplayerGameState::MultiplayerGameState(StateStack& stack, Context context)
 			auto* srv = GetContext().network->GetServer();
 			srv->SetAircraftColor(0, hostColor->r, hostColor->g, hostColor->b);
 
-			// Push a kColorSync HostEvent so PollGameplayPacket delivers it to
-			// the host game-side — this ensures the host's own actor gets tinted
+			// Push HostEvent so PollGameplayPacket applies color to host's own actor
 			GameServer::HostEvent ev;
 			ev.type = GameServer::HostEvent::kColorSync;
 			ev.aircraft_id = 0;
@@ -65,6 +64,10 @@ MultiplayerGameState::MultiplayerGameState(StateStack& stack, Context context)
 			ev.g = hostColor->g;
 			ev.b = hostColor->b;
 			srv->PushHostEvent(ev);
+
+			// Re-broadcast all colors so any already-connected client receives the
+			// correct host color (HandleIncomingConnections sent the default white)
+			srv->BroadcastAllColors();
 		}
 	}
 }
@@ -107,20 +110,16 @@ bool MultiplayerGameState::Update(sf::Time dt)
 				continue;
 
 			auto& interp = m_remote_interp[s.id];
+			//Always refresh velocity and anim — these drive dead-reckoning and animation
+			interp.target    = { s.x, s.y };
+			interp.velocity  = { s.vx, s.vy };
+			interp.hp        = s.hp;
+			interp.ammo      = s.ammo;
+			interp.anim      = s.anim;
 			if (!interp.initialized)
 			{
-				interp.current = { s.x, s.y };
-				interp.target = { s.x, s.y };
-				interp.velocity = { s.vx, s.vy };
-				interp.hp = s.hp;
-				interp.ammo = s.ammo;
+				interp.current     = { s.x, s.y };
 				interp.initialized = true;
-			}
-			else
-			{
-				interp.target = { s.x, s.y };
-				interp.hp = s.hp;
-				interp.ammo = s.ammo;
 			}
 		}
 
@@ -500,6 +499,7 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 			if (a)
 			{
 				const sf::Vector2f pos = a->getPosition();
+				const sf::Vector2f vel = a->GetVelocity();
 				const std::uint8_t hp = static_cast<std::uint8_t>(
 					std::max(0, std::min(255, a->GetHitPoints())));
 				const std::uint8_t anim = m_world.GetLocalPlayerAnimState(0);
@@ -507,7 +507,7 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 				sf::Packet p;
 				p << static_cast<std::uint8_t>(Client::PacketType::kStateUpdate);
 				p << static_cast<std::uint8_t>(1);
-				p << aircraftId << pos.x << pos.y << hp
+				p << aircraftId << pos.x << pos.y << vel.x << vel.y << hp
 					<< static_cast<std::uint8_t>(0) << anim;
 				GetContext().network->SendGameplayPacket(p);
 			}
