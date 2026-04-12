@@ -268,6 +268,18 @@ void World::UpdateCameraZoom(sf::Time dt)
 		}
 	}
 
+	for (auto& kv : m_network_actors)
+	{
+		Aircraft* actor = kv.second;
+		if (!actor || actor->IsDestroyed())
+			continue;
+		bool alreadyAdded = false;
+		for (Aircraft* p : alive_players)
+			if (p == actor) { alreadyAdded = true; break; }
+		if (!alreadyAdded)
+			alive_players.push_back(actor);
+	}
+
 	if (alive_players.empty())
 		return;
 

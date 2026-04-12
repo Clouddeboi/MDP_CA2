@@ -532,22 +532,24 @@ void GameServer::HandleIncomingConnections()
 
         // Send all existing aircraft colors directly to the new peer
         // (SendToAll won't reach it yet since m_connected_players not incremented)
-        {
-            std::scoped_lock lock(m_aircraft_mutex);
-            for (const auto& kv : m_aircraft_info)
-            {
-                sf::Packet cp;
-                cp << static_cast<uint8_t>(Server::PacketType::kPlayerColorSync)
-                   << kv.first
-                   << kv.second.m_color_r
-                   << kv.second.m_color_g
-                   << kv.second.m_color_b;
-                m_peers[m_connected_players]->m_socket.send(cp);
-            }
-        }
+        //{
+        //    std::scoped_lock lock(m_aircraft_mutex);
+        //    for (const auto& kv : m_aircraft_info)
+        //    {
+        //        sf::Packet cp;
+        //        cp << static_cast<uint8_t>(Server::PacketType::kPlayerColorSync)
+        //           << kv.first
+        //           << kv.second.m_color_r
+        //           << kv.second.m_color_g
+        //           << kv.second.m_color_b;
+        //        m_peers[m_connected_players]->m_socket.send(cp);
+        //    }
+        //}
 
         m_aircraft_count++;
         m_connected_players++;
+
+        BroadcastAllColors();
 
         if (m_connected_players >= m_max_connected_players)
         {

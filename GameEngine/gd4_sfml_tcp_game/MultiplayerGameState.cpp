@@ -64,10 +64,9 @@ MultiplayerGameState::MultiplayerGameState(StateStack& stack, Context context)
 			ev.g = hostColor->g;
 			ev.b = hostColor->b;
 			srv->PushHostEvent(ev);
-
-			// Re-broadcast all colors so any already-connected client receives the
-			// correct host color (HandleIncomingConnections sent the default white)
-			srv->BroadcastAllColors();
+			// NOTE: BroadcastAllColors is intentionally NOT called here —
+			// no peers exist yet. It is called from HandleIncomingConnections
+			// after m_connected_players is incremented.
 		}
 	}
 }
@@ -297,10 +296,14 @@ bool MultiplayerGameState::Update(sf::Time dt)
 			st.current += delta * correctionRate;
 		}
 
-		// Derive animation directly from velocity — same logic as local player
+		// Derive animation from velocity when moving; fall back to last known facing when idle
 		const float vx = st.velocity.x;
-		const bool facingRight = (vx >= 0.f) || (std::abs(vx) < 1.f && (st.anim & 1u));
 		const bool isRunning = std::abs(vx) > 10.f;
+		bool facingRight;
+		if (std::abs(vx) > 1.f)
+			facingRight = (vx > 0.f);          // moving: direction from velocity
+		else
+			facingRight = (st.anim & 1u) != 0; // idle: preserve last snapshotted facing
 		const std::uint8_t animFlags = static_cast<std::uint8_t>(
 			(facingRight ? 1u : 0u) | (isRunning ? 2u : 0u));
 
