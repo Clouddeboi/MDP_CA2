@@ -118,6 +118,8 @@ bool MultiplayerGameState::Update(sf::Time dt)
 			{
 				interp.current = { s.x, s.y };
 				interp.target = { s.x, s.y };
+				interp.velocity = { s.vx, s.vy };
+				interp.time_since_snap = sf::Time::Zero;
 				interp.hp = s.hp;
 				interp.ammo = s.ammo;
 				interp.initialized = true;
@@ -125,6 +127,8 @@ bool MultiplayerGameState::Update(sf::Time dt)
 			else
 			{
 				interp.target = { s.x, s.y };
+				interp.velocity = { s.vx, s.vy };
+				interp.time_since_snap = sf::Time::Zero;
 				interp.hp = s.hp;
 				interp.ammo = s.ammo;
 			}
@@ -181,13 +185,14 @@ bool MultiplayerGameState::Update(sf::Time dt)
 			if (a)
 			{
 				const sf::Vector2f pos = a->getPosition();
+				const sf::Vector2f vel = a->GetVelocity();   // <-- send real velocity
 				const uint8_t hp = static_cast<uint8_t>(std::max(0, std::min(255, a->GetHitPoints())));
 				const uint8_t ammo = 0;
 				const uint8_t anim = m_world.GetLocalPlayerAnimState(0);
 
 				auto* server = GetContext().network->GetServer();
 				if (server)
-					server->UpdateHostAircraftState(pos, hp, ammo, anim);
+					server->UpdateHostAircraftState(pos, vel, hp, ammo, anim);
 			}
 		}
 		// CLIENT path: send via TCP (existing logic)
@@ -250,11 +255,15 @@ bool MultiplayerGameState::Update(sf::Time dt)
 					continue;
 
 				const sf::Vector2f pos = a->getPosition();
+				const sf::Vector2f vel = a->GetVelocity();
 				const std::uint8_t hp = static_cast<std::uint8_t>(std::max(0, std::min(255, a->GetHitPoints())));
 				const std::uint8_t ammo = 0;
 
 				const std::uint8_t anim = m_world.GetLocalPlayerAnimState(localSlot);
-				p << aircraft_identifier << pos.x << pos.y << hp << ammo << anim;
+				p << aircraft_identifier
+					<< pos.x << pos.y
+					<< vel.x << vel.y
+					<< hp << ammo << anim;
 
 				auto& last = m_last_sent_local_states[aircraft_identifier];
 				last.position = pos;
@@ -285,9 +294,19 @@ bool MultiplayerGameState::Update(sf::Time dt)
 		if (!st.initialized)
 			continue;
 
-		const sf::Vector2f delta = st.target - st.current;
-		const float lerpFactor = std::min(1.f, dt.asSeconds() * 12.f);
-		st.current += delta * lerpFactor;
+		// Advance the clock since the last received snapshot
+		st.time_since_snap += dt;
+
+		// Predict where the remote player is RIGHT NOW using their last known velocity.
+		// Cap extrapolation at 150ms so a network stall doesn't send the ghost flying.
+		constexpr float kMaxExtrapolation = 0.15f;
+		const float t = std::min(st.time_since_snap.asSeconds(), kMaxExtrapolation);
+		const sf::Vector2f deadReckoned = st.target + st.velocity * t;
+
+		// Smoothly blend the rendered position toward the prediction.
+		// 15x per-second is snappy enough to correct errors without snapping.
+		const float blend = std::min(1.f, dt.asSeconds() * 15.f);
+		st.current += (deadReckoned - st.current) * blend;
 
 		m_world.UpdateNetworkActorState(id, st.current, st.hp, st.ammo, st.anim);
 	}
@@ -541,12 +560,10 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 		for (std::uint8_t i = 0; i < count; ++i)
 		{
 			NetActorState s;
-			if (!(packet >> s.id >> s.x >> s.y >> s.hp >> s.ammo >> s.anim))
+			if (!(packet >> s.id >> s.x >> s.y >> s.vx >> s.vy >> s.hp >> s.ammo >> s.anim))
 				return;
-
 			m_latest_snapshot.push_back(s);
 
-			//If this id belongs to any local-owned slot, keep reverse map fresh
 			for (const auto& kv : m_local_player_to_aircraft_id)
 			{
 				if (kv.second == s.id)

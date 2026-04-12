@@ -488,7 +488,10 @@ bool NetworkSession::PollGameplayPacket(sf::Packet& outPacket)
 		outPacket << static_cast<std::uint8_t>(states.size());
 
 		for (const auto& s : states)
-			outPacket << s.id << s.position.x << s.position.y << s.hp << s.ammo << s.anim;
+			outPacket << s.id
+			<< s.position.x << s.position.y
+			<< s.velocity.x << s.velocity.y
+			<< s.hp << s.ammo << s.anim;
 
 		return true;
 	}
