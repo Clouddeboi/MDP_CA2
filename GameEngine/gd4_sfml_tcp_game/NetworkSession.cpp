@@ -435,18 +435,42 @@ bool NetworkSession::ConsumeAssignedLocalPlayerIndex(int& playerIndex)
 
 bool NetworkSession::PollGameplayPacket(sf::Packet& outPacket)
 {
-	if (m_mode != NetworkMode::kClient || !m_client_socket || !m_client_connected)
-		return false;
-
-	m_client_socket->setBlocking(false);
-	const auto status = m_client_socket->receive(outPacket);
-
-	if (status == sf::Socket::Status::Done)
-		return true;
-
-	if (status == sf::Socket::Status::Disconnected)
+	// Client path: read from TCP socket
+	if (m_mode == NetworkMode::kClient && m_client_socket && m_client_connected)
 	{
-		m_client_connected = false;
+		m_client_socket->setBlocking(false);
+		const auto status = m_client_socket->receive(outPacket);
+
+		if (status == sf::Socket::Status::Done)
+			return true;
+
+		if (status == sf::Socket::Status::Disconnected)
+		{
+			m_client_connected = false;
+		}
+		return false;
+	}
+
+	// Host path: synthesize a kUpdateClientState packet from server state
+	if (m_mode == NetworkMode::kHost && m_server)
+	{
+		std::vector<GameServer::NetAircraftState> states;
+		m_server->CopyAircraftStates(states);
+
+		// no data -> no packet
+		if (states.empty())
+			return false;
+
+		outPacket.clear();
+		outPacket << static_cast<std::uint8_t>(Server::PacketType::kUpdateClientState);
+		outPacket << 0.f; // worldScroll placeholder for host-local readback
+		outPacket << static_cast<std::uint8_t>(states.size());
+
+		for (const auto& s : states)
+		{
+			outPacket << s.id << s.position.x << s.position.y << s.hp << s.ammo;
+		}
+		return true;
 	}
 
 	return false;

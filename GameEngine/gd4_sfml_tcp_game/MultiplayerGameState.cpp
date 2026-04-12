@@ -65,56 +65,11 @@ bool MultiplayerGameState::Update(sf::Time dt)
 	m_perf.sample_window += dt;
 	++m_perf.frames;
 
-	if (GetContext().network && GetContext().network->IsClient())
+	if (GetContext().network && (GetContext().network->IsClient() || GetContext().network->IsHosting()))
 	{
-      sf::Clock section_timer;
+		sf::Clock section_timer;
 		PollNetworkGameplay();
-       m_perf.net_poll_time_total += section_timer.getElapsedTime();
-	}
-
-	if (GetContext().network && GetContext().network->IsHosting())
-	{
-		GameServer* server = GetContext().network->GetServer();
-		if (server)
-		{
-			std::vector<GameServer::NetAircraftState> hostStates;
-			server->CopyAircraftStates(hostStates);
-
-			std::unordered_set<std::uint8_t> presentIds;
-			for (const auto& s : hostStates)
-			{
-				presentIds.insert(s.id);
-
-				auto localIt = m_net_to_local_player_index.find(s.id);
-				if (localIt != m_net_to_local_player_index.end())
-				{
-					Aircraft* a = m_world.GetPlayerAircraft(localIt->second);
-					if (a)
-					{
-						a->setPosition(s.position);
-					}
-					continue;
-				}
-
-				m_known_remote_network_ids.insert(s.id);
-				m_world.SpawnNetworkActor(s.id, s.position, sf::Color::Cyan);
-				m_world.UpdateNetworkActorState(s.id, s.position, s.hp, s.ammo);
-			}
-
-			for (auto it = m_known_remote_network_ids.begin(); it != m_known_remote_network_ids.end();)
-			{
-				if (presentIds.find(*it) == presentIds.end())
-				{
-					m_world.RemoveNetworkActor(*it);
-					m_remote_interp.erase(*it);
-					it = m_known_remote_network_ids.erase(it);
-				}
-				else
-				{
-					++it;
-				}
-			}
-		}
+		m_perf.net_poll_time_total += section_timer.getElapsedTime();
 	}
 
  sf::Clock world_timer;
@@ -178,6 +133,10 @@ bool MultiplayerGameState::Update(sf::Time dt)
 
 	if (m_world.ShouldReturnToMenu())
 	{
+		if (GetContext().music)
+		{
+			GetContext().music->Stop();
+		}
 		RequestStackClear();
 		RequestStackPush(StateID::kMenu);
 		return false;
