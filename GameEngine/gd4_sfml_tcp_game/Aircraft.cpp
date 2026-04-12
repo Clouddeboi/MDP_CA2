@@ -99,16 +99,12 @@ Aircraft::Aircraft(AircraftType type, const TextureHolder& textures, const FontH
 	Utility::CentreOrigin(m_sprite);
 	Utility::CentreOrigin(m_explosion);
 
-	if (m_player_id >= 0)
+	if (m_player_id >= 0 || m_player_id == -1)
 	{
-		//Create dust emitter for player and store pointer so we can toggle emission on/off
 		std::unique_ptr<EmitterNode> dust_emitter(new EmitterNode(ParticleType::kDust));
 		m_dust_emitter = dust_emitter.get();
-
-		//Position emitter at the players feet
 		m_dust_emitter->setPosition({ 0.f, 32.f });
 		m_dust_emitter->SetEmissionRate(15.f);
-
 		AttachChild(std::move(dust_emitter));
 
 		m_use_animations = true;

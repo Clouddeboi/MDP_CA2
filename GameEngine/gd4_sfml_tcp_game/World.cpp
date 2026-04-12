@@ -2005,7 +2005,10 @@ void World::SpawnNetworkActor(std::uint8_t networkId, const sf::Vector2f& positi
 
 	if (slotOccupiedByLocal)
 	{
-		std::unique_ptr<Aircraft> actor(new Aircraft(AircraftType::kEagle, m_textures, m_fonts, playerSlot));
+		// Was: new Aircraft(AircraftType::kEagle, m_textures, m_fonts, playerSlot)
+		// playerSlot=0 made GetCategory() return kPlayer1Aircraft → received all Player(0) input commands
+		// Fix: use -1 so GetCategory() returns generic kPlayerAircraft (never dispatched to by any Player)
+		std::unique_ptr<Aircraft> actor(new Aircraft(AircraftType::kEagle, m_textures, m_fonts, -1));
 		Aircraft* actorPtr = actor.get();
 
 		actorPtr->SetPlayerColor(tint);
@@ -2032,7 +2035,6 @@ void World::SpawnNetworkActor(std::uint8_t networkId, const sf::Vector2f& positi
 			m_scene_layers[static_cast<int>(SceneLayers::kUI)]->AttachChild(std::move(score_display));
 		}
 
-		// Ensure m_player_scores has a slot for this player
 		while (static_cast<int>(m_player_scores.size()) <= playerSlot)
 			m_player_scores.push_back(0);
 
