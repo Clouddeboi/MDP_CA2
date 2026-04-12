@@ -259,80 +259,68 @@ void World::Update(sf::Time dt)
 
 void World::UpdateCameraZoom(sf::Time dt)
 {
-	std::vector<Aircraft*> alive_players;
+	std::vector<sf::Vector2f> alive_positions;
+
+	// Local physics-controlled players
 	for (Aircraft* player : m_player_aircrafts)
 	{
 		if (player && !player->IsDestroyed())
-		{
-			alive_players.push_back(player);
-		}
+			alive_positions.push_back(player->getPosition());
 	}
 
-	if (alive_players.empty())
+	// Remote network actors (the other player(s) as seen by this machine)
+	for (const auto& kv : m_network_actors)
+	{
+		if (kv.second && !kv.second->IsDestroyed())
+			alive_positions.push_back(kv.second->getPosition());
+	}
+
+	if (alive_positions.empty())
 		return;
 
 	sf::Vector2f camera_target;
 	float target_zoom;
 
-	if (alive_players.size() == 1)
+	if (alive_positions.size() == 1)
 	{
-		camera_target = alive_players[0]->getPosition();
+		camera_target = alive_positions[0];
 		target_zoom = m_min_zoom;
 	}
 	else
 	{
-		//Multiple players alive, calculate midpoint
-		sf::Vector2f sum_positions(0.f, 0.f);
-		for (Aircraft* player : alive_players)
+		// Midpoint of all players
+		sf::Vector2f sum(0.f, 0.f);
+		for (const auto& pos : alive_positions)
+			sum += pos;
+		camera_target = sum / static_cast<float>(alive_positions.size());
+
+		// Bounding box of all players
+		float min_x = alive_positions[0].x, max_x = alive_positions[0].x;
+		float min_y = alive_positions[0].y, max_y = alive_positions[0].y;
+		for (size_t i = 1; i < alive_positions.size(); ++i)
 		{
-			sum_positions += player->getPosition();
+			min_x = std::min(min_x, alive_positions[i].x);
+			max_x = std::max(max_x, alive_positions[i].x);
+			min_y = std::min(min_y, alive_positions[i].y);
+			max_y = std::max(max_y, alive_positions[i].y);
 		}
-		camera_target = sum_positions / static_cast<float>(alive_players.size());
 
-		if (alive_players.size() >= 2)
-		{
-			//Calculate bounding box of all players
-			float min_x = alive_players[0]->getPosition().x;
-			float max_x = alive_players[0]->getPosition().x;
-			float min_y = alive_players[0]->getPosition().y;
-			float max_y = alive_players[0]->getPosition().y;
+		const float padding = 200.f;
+		float required_width = (max_x - min_x) + (padding * 2.f);
+		float required_height = (max_y - min_y) + (padding * 2.f);
 
-			for (size_t i = 1; i < alive_players.size(); ++i)
-			{
-				sf::Vector2f pos = alive_players[i]->getPosition();
-				min_x = std::min(min_x, pos.x);
-				max_x = std::max(max_x, pos.x);
-				min_y = std::min(min_y, pos.y);
-				max_y = std::max(max_y, pos.y);
-			}
+		sf::Vector2f view_size = m_target.getDefaultView().getSize();
+		float zoom_for_width = required_width / view_size.x;
+		float zoom_for_height = required_height / view_size.y;
 
-			//Add padding around players
-			const float padding = 200.f;
-			float required_width = (max_x - min_x) + (padding * 2.f);
-			float required_height = (max_y - min_y) + (padding * 2.f);
-
-			//Calculate zoom needed to fit this area
-			sf::Vector2f view_size = m_target.getDefaultView().getSize();
-
-			//Calculate zoom factors needed for width and height
-			float zoom_for_width = required_width / view_size.x;
-			float zoom_for_height = required_height / view_size.y;
-
-			//Use the larger zoom to ensure both dimensions fit
-			target_zoom = std::max(zoom_for_width, zoom_for_height);
-			target_zoom = std::max(m_min_zoom, std::min(target_zoom, m_max_zoom));
-		}
-		else
-		{
-			target_zoom = m_min_zoom;
-		}
+		target_zoom = std::max(zoom_for_width, zoom_for_height);
+		target_zoom = std::max(m_min_zoom, std::min(target_zoom, m_max_zoom));
 	}
 
 	float zoom_delta = target_zoom - m_current_zoom_level;
 	m_current_zoom_level += zoom_delta * m_zoom_speed * dt.asSeconds();
 
 	sf::Vector2f cameraSize = m_target.getDefaultView().getSize() * m_current_zoom_level;
-
 	float half_width = cameraSize.x / 2.f;
 	float half_height = cameraSize.y / 2.f;
 
@@ -343,7 +331,6 @@ void World::UpdateCameraZoom(sf::Time dt)
 
 	m_camera = m_target.getDefaultView();
 	m_camera.zoom(m_current_zoom_level);
-
 	m_camera.setCenter(camera_target);
 }
 
