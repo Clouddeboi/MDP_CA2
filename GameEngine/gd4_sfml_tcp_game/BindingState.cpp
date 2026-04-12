@@ -298,16 +298,14 @@ bool BindingState::Update(sf::Time dt)
 				//Keep host slot interactive
 				if (m_local_player_index >= 0 && m_local_player_index < GetJoinedPlayerCount())
 				{
-					m_player_slots[m_local_player_index].ShowColorPicker(true);
+					if (!m_network_mode)
+						m_player_slots[m_local_player_index].ShowColorPicker(true);
 				}
 				else
 				{
-					//fallback if local index was shifted by remove
 					m_local_player_index = 0;
-					if (GetJoinedPlayerCount() > 0)
-					{
+					if (GetJoinedPlayerCount() > 0 && !m_network_mode)
 						m_player_slots[m_local_player_index].ShowColorPicker(true);
-					}
 				}
 
 				if (m_instructions_text)
@@ -384,76 +382,45 @@ bool BindingState::HandleEvent(const sf::Event& event)
 				return false;
 			}
 
-			if (m_player_slots[i].IsShowingColorPicker() &&
-				(keyPressed->code == sf::Keyboard::Key::W ||
-					keyPressed->code == sf::Keyboard::Key::A ||
-					keyPressed->code == sf::Keyboard::Key::S ||
-					keyPressed->code == sf::Keyboard::Key::D ||
-					keyPressed->code == sf::Keyboard::Key::Up ||
-					keyPressed->code == sf::Keyboard::Key::Down ||
-					keyPressed->code == sf::Keyboard::Key::Left ||
-					keyPressed->code == sf::Keyboard::Key::Right))
-			{
-				int dx = 0, dy = 0;
-				if (keyPressed->code == sf::Keyboard::Key::W || keyPressed->code == sf::Keyboard::Key::Up) dy = -1;
-				if (keyPressed->code == sf::Keyboard::Key::S || keyPressed->code == sf::Keyboard::Key::Down) dy = 1;
-				if (keyPressed->code == sf::Keyboard::Key::A || keyPressed->code == sf::Keyboard::Key::Left) dx = -1;
-				if (keyPressed->code == sf::Keyboard::Key::D || keyPressed->code == sf::Keyboard::Key::Right) dx = 1;
+			//if (m_player_slots[i].IsShowingColorPicker() &&
+			//	(keyPressed->code == sf::Keyboard::Key::W ||
+			//		keyPressed->code == sf::Keyboard::Key::A ||
+			//		keyPressed->code == sf::Keyboard::Key::S ||
+			//		keyPressed->code == sf::Keyboard::Key::D ||
+			//		keyPressed->code == sf::Keyboard::Key::Up ||
+			//		keyPressed->code == sf::Keyboard::Key::Down ||
+			//		keyPressed->code == sf::Keyboard::Key::Left ||
+			//		keyPressed->code == sf::Keyboard::Key::Right))
+			//{
+			//	int dx = 0, dy = 0;
+			//	if (keyPressed->code == sf::Keyboard::Key::W || keyPressed->code == sf::Keyboard::Key::Up) dy = -1;
+			//	if (keyPressed->code == sf::Keyboard::Key::S || keyPressed->code == sf::Keyboard::Key::Down) dy = 1;
+			//	if (keyPressed->code == sf::Keyboard::Key::A || keyPressed->code == sf::Keyboard::Key::Left) dx = -1;
+			//	if (keyPressed->code == sf::Keyboard::Key::D || keyPressed->code == sf::Keyboard::Key::Right) dx = 1;
 
-				m_player_slots[i].NavigateColorGrid(dx, dy);
-				GetContext().sounds->Play(SoundEffect::kButtonClick);
+			//	m_player_slots[i].NavigateColorGrid(dx, dy);
+			//	GetContext().sounds->Play(SoundEffect::kButtonClick);
 
-				//Immediate sync
-				const int localColor = m_player_slots[i].GetSelectedColorIndex();
-				const bool localReady = m_player_slots[i].IsReady();
-				GetContext().network->SendLobbyBindingState(m_local_player_index, localColor, localReady);
-				m_last_sent_color = localColor;
-				m_last_sent_ready = localReady;
+			//	//Immediate sync
+			//	const int localColor = m_player_slots[i].GetSelectedColorIndex();
+			//	const bool localReady = m_player_slots[i].IsReady();
+			//	GetContext().network->SendLobbyBindingState(m_local_player_index, localColor, localReady);
+			//	m_last_sent_color = localColor;
+			//	m_last_sent_ready = localReady;
 
-				return false;
-			}
+			//	return false;
+			//}
 
-			//Confirm/ready/start
+			//Confirm/ready/start — no color picker in network mode, just ready up
 			if (keyPressed->code == sf::Keyboard::Key::Enter || keyPressed->code == sf::Keyboard::Key::Space)
 			{
-				//First confirm color if picker open
-				if (m_player_slots[i].IsShowingColorPicker())
-				{
-					m_player_slots[i].ConfirmColorSelection();
-					m_player_slots[i].SetReady(true);
-					GetContext().sounds->Play(SoundEffect::kPairedPlayer);
-
-					const int localColor = m_player_slots[i].GetSelectedColorIndex();
-					const bool localReady = m_player_slots[i].IsReady();
-					GetContext().network->SendLobbyBindingState(m_local_player_index, localColor, localReady);
-					m_last_sent_color = localColor;
-					m_last_sent_ready = localReady;
-
-					return false;
-				}
-
 				//If all ready, host starts, client requests start
 				if (AreAllPlayersReady())
 				{
 					if (GetContext().network->IsHosting())
 					{
-						//Save all player colors to config before transitioning
-						{
-							auto& config = PlayerBindingConfig::GetInstance();
-							config.SetPlayerCount(GetJoinedPlayerCount());
-							for (int j = 0; j < GetJoinedPlayerCount(); ++j)
-							{
-								int colorIdx = m_player_slots[j].GetSelectedColorIndex();
-								if (colorIdx >= 0 && colorIdx < static_cast<int>(m_all_colors.size()))
-								{
-									config.SetPlayerColor(j, m_all_colors[colorIdx]);
-								}
-							}
-						}
-
 						GetContext().network->SendLobbyStartGame();
 						GetContext().sounds->Play(SoundEffect::kStartGame);
-
 						RequestStackPop();
 						RequestStackPush(StateID::kMultiplayerGame);
 					}
@@ -465,15 +432,9 @@ bool BindingState::HandleEvent(const sf::Event& event)
 					return false;
 				}
 
-				//Otherwise toggle local ready
+				//Toggle ready
 				const bool currentReady = m_player_slots[i].IsReady();
 				m_player_slots[i].SetReady(!currentReady);
-
-				if (currentReady)
-				{
-					m_player_slots[i].ShowColorPicker(true);
-				}
-
 				GetContext().sounds->Play(SoundEffect::kButtonClick);
 
 				const int localColor = m_player_slots[i].GetSelectedColorIndex();

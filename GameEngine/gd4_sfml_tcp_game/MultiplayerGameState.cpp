@@ -595,35 +595,6 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 	}
 	break;
 	case Server::PacketType::kPlayerColorSync:
-	{
-		std::uint8_t id = 0, r = 0, g = 0, b = 0;
-		if (!(packet >> id >> r >> g >> b))
-			return;
-
-		const sf::Color color(r, g, b);
-
-		std::cout << "[MP] kPlayerColorSync id=" << (int)id
-			<< " rgb=(" << (int)r << "," << (int)g << "," << (int)b << ")\n";
-
-		// Store in global config keyed by network ID
-		PlayerBindingConfig::GetInstance().SetPlayerColor(static_cast<int>(id), color);
-
-		// Apply to remote network actor if it exists
-		m_world.SetNetworkActorColor(id, color);
-
-		// If this is our own ID (host receiving its own sync-back, or any echo),
-		// also apply to local physics player so colors are consistent
-		auto it = m_local_player_to_aircraft_id.begin();
-		for (; it != m_local_player_to_aircraft_id.end(); ++it)
-		{
-			if (it->second == id)
-			{
-				Aircraft* a = m_world.GetPlayerAircraft(it->first);
-				if (a) a->SetPlayerColor(color);
-				break;
-			}
-		}
-	}
 	break;
 	case Server::PacketType::kSpawnProjectile:
 	{
