@@ -2378,16 +2378,13 @@ void World::SetOnProjectileFiredCallback(
 	m_on_projectile_fired = std::move(cb);
 }
 
-void World::SpawnNetworkProjectile(std::uint8_t ownerId,
-	const sf::Vector2f& pos, const sf::Vector2f& vel)
+void World::SpawnNetworkProjectile(std::uint8_t ownerId, const sf::Vector2f& pos, const sf::Vector2f& vel)
 {
-	// Spawn a ghost bullet locally for the remote owner — physics-enabled so it
-	// travels and collides on this machine too
 	std::unique_ptr<Projectile> bullet(
 		new Projectile(ProjectileType::kAlliedBullet, m_textures));
 	bullet->setPosition(pos);
 	bullet->SetVelocity(vel);
-	// Ghost bullets must collide — leave physics enabled (default)
+	bullet->MarkBroadcast();
 	m_scene_layers[static_cast<int>(SceneLayers::kUpperAir)]
 		->AttachChild(std::move(bullet));
 

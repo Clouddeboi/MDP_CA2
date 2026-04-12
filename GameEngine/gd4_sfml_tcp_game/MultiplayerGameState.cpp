@@ -49,15 +49,22 @@ MultiplayerGameState::MultiplayerGameState(StateStack& stack, Context context)
 	{
 		m_world.SetLocalNetworkId(0);
 
-		// Push the host's chosen lobby color into the server so it gets broadcast
-		// to all clients when they connect.
 		auto& config = PlayerBindingConfig::GetInstance();
 		auto hostColor = config.GetPlayerColor(0);
 		if (hostColor.has_value() && GetContext().network->GetServer())
 		{
-			GetContext().network->GetServer()->SetAircraftColor(
-				0,
-				hostColor->r, hostColor->g, hostColor->b);
+			auto* srv = GetContext().network->GetServer();
+			srv->SetAircraftColor(0, hostColor->r, hostColor->g, hostColor->b);
+
+			// Push a kColorSync HostEvent so PollGameplayPacket delivers it to
+			// the host game-side — this ensures the host's own actor gets tinted
+			GameServer::HostEvent ev;
+			ev.type = GameServer::HostEvent::kColorSync;
+			ev.aircraft_id = 0;
+			ev.r = hostColor->r;
+			ev.g = hostColor->g;
+			ev.b = hostColor->b;
+			srv->PushHostEvent(ev);
 		}
 	}
 }
@@ -614,12 +621,15 @@ void MultiplayerGameState::OnRemotePlayerConnected(std::uint8_t networkId, float
 	m_known_remote_network_ids.insert(networkId);
 	++m_perf.remote_connects;
 
-	// Use the lobby-chosen color for this remote player if available.
-	// NOTE: color may not have arrived yet if kPlayerColorSync is in-flight —
-	// SetNetworkActorColor() will correct it when that packet lands.
-	sf::Color tint = sf::Color::Cyan; // visible fallback
-	auto& config = PlayerBindingConfig::GetInstance();
-	auto remoteColor = config.GetPlayerColor(static_cast<int>(networkId));
+	// Spawn with white — kPlayerColorSync arrives immediately after and applies
+	// the real color. Using a stale config value here causes the wrong color to
+	// briefly (or permanently) show when the sync packet hasn't arrived yet.
+	sf::Color tint = sf::Color::White;
+
+	// Use config color only if it's already been stored under the correct network ID
+	// (i.e. a prior kPlayerColorSync already arrived for this ID)
+	auto remoteColor = PlayerBindingConfig::GetInstance().GetPlayerColor(
+		static_cast<int>(networkId));
 	if (remoteColor.has_value())
 		tint = remoteColor.value();
 
@@ -627,8 +637,8 @@ void MultiplayerGameState::OnRemotePlayerConnected(std::uint8_t networkId, float
 
 	std::cout << "[MP] Remote player connected: id=" << static_cast<int>(networkId)
 		<< " pos=(" << x << ", " << y << ")"
-		<< " color=(" << (int)tint.r << "," << (int)tint.g << "," << (int)tint.b << ")"
-		<< " (from_config=" << remoteColor.has_value() << ")\n";
+		<< " tint=(" << (int)tint.r << "," << (int)tint.g << "," << (int)tint.b
+		<< ") config_hit=" << remoteColor.has_value() << "\n";
 }
 
 void MultiplayerGameState::OnRemotePlayerDisconnected(std::uint8_t networkId)

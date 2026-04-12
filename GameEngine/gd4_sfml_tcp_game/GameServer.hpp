@@ -66,6 +66,7 @@ public:
 
 	void UpdateHostAircraftState(const sf::Vector2f& pos, uint8_t hp, uint8_t ammo);
 	bool PollHostEvent(HostEvent& outEvent);
+	void PushHostEvent(const HostEvent& event);
 
 private:
 	struct RemotePeer
@@ -115,8 +116,6 @@ private:
 
 	int FindFreeLobbyPlayerIndex() const;
 	void EnsureHostLobbyState();
-
-	void PushHostEvent(const HostEvent& event);
 
 private:
 	std::thread m_thread;
