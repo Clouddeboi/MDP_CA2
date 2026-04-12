@@ -50,7 +50,8 @@ MultiplayerGameState::MultiplayerGameState(StateStack& stack, Context context)
 	}
 
 	RebuildNetworkPlayerMap();
-	m_world.SetCollisionEnabled(false);
+	const bool isHost = (GetContext().network && GetContext().network->IsHosting());
+	m_world.SetCollisionEnabled(isHost);
 }
 
 void MultiplayerGameState::Draw()
@@ -79,13 +80,11 @@ bool MultiplayerGameState::Update(sf::Time dt)
 			std::vector<GameServer::NetAircraftState> hostStates;
 			server->CopyAircraftStates(hostStates);
 
-			//Track ids present this tick
 			std::unordered_set<std::uint8_t> presentIds;
 			for (const auto& s : hostStates)
 			{
 				presentIds.insert(s.id);
 
-				//Do not overwrite local known player slots on host
 				auto localIt = m_net_to_local_player_index.find(s.id);
 				if (localIt != m_net_to_local_player_index.end())
 				{
@@ -97,13 +96,11 @@ bool MultiplayerGameState::Update(sf::Time dt)
 					continue;
 				}
 
-				//Treat as remote actor on host view
 				m_known_remote_network_ids.insert(s.id);
 				m_world.SpawnNetworkActor(s.id, s.position, sf::Color::Cyan);
 				m_world.UpdateNetworkActorState(s.id, s.position, s.hp, s.ammo);
 			}
 
-			//Remove stale remote actors not present anymore
 			for (auto it = m_known_remote_network_ids.begin(); it != m_known_remote_network_ids.end();)
 			{
 				if (presentIds.find(*it) == presentIds.end())
@@ -126,60 +123,57 @@ bool MultiplayerGameState::Update(sf::Time dt)
 
 	if (m_has_new_snapshot)
 	{
-     sf::Clock snapshot_timer;
+		sf::Clock snapshot_timer;
+
 		for (const auto& s : m_latest_snapshot)
 		{
-			//Unknown ids in snapshot are ignored unless already known remote players.
-			//This prevents enemy/projectile IDs being mis-created as player actors.
-			if (!IsKnownLocalNetworkId(s.id))
+			// Local actor path (owned by this machine)
+			if (IsKnownLocalNetworkId(s.id))
 			{
-				if (m_known_remote_network_ids.find(s.id) == m_known_remote_network_ids.end())
-				{
+				auto it = m_net_to_local_player_index.find(s.id);
+				if (it == m_net_to_local_player_index.end())
 					continue;
-				}
 
-				auto& interp = m_remote_interp[s.id];
-				if (!interp.initialized)
-				{
-					interp.current = { s.x, s.y };
-					interp.target = { s.x, s.y };
-					interp.hp = s.hp;
-					interp.ammo = s.ammo;
-					interp.initialized = true;
-				}
-				else
-				{
-					interp.target = { s.x, s.y };
-					interp.hp = s.hp;
-					interp.ammo = s.ammo;
-				}
+				const int playerIdx = it->second;
+				Aircraft* a = m_world.GetPlayerAircraft(playerIdx);
+				if (!a)
+					continue;
+
+				a->setPosition({ s.x, s.y });
+
+				const int currentHp = a->GetHitPoints();
+				if (s.hp < static_cast<std::uint8_t>(currentHp))
+					a->Damage(currentHp - static_cast<int>(s.hp));
+				else if (s.hp > static_cast<std::uint8_t>(currentHp))
+					a->Repair(static_cast<int>(s.hp) - currentHp);
 
 				continue;
 			}
 
-			//Remote known actor path (MUST already be known from connect/spawn event)
-			if (m_known_remote_network_ids.find(s.id) != m_known_remote_network_ids.end())
+			// Unknown ids are ignored unless already known as remote players
+			if (m_known_remote_network_ids.find(s.id) == m_known_remote_network_ids.end())
+				continue;
+
+			// Remote interpolation path
+			auto& interp = m_remote_interp[s.id];
+			if (!interp.initialized)
 			{
-				auto& interp = m_remote_interp[s.id];
-				if (!interp.initialized)
-				{
-					interp.current = { s.x, s.y };
-					interp.target = { s.x, s.y };
-					interp.hp = s.hp;
-					interp.ammo = s.ammo;
-					interp.initialized = true;
-				}
-				else
-				{
-					interp.target = { s.x, s.y };
-					interp.hp = s.hp;
-					interp.ammo = s.ammo;
-				}
+				interp.current = { s.x, s.y };
+				interp.target = { s.x, s.y };
+				interp.hp = s.hp;
+				interp.ammo = s.ammo;
+				interp.initialized = true;
+			}
+			else
+			{
+				interp.target = { s.x, s.y };
+				interp.hp = s.hp;
+				interp.ammo = s.ammo;
 			}
 		}
 
 		m_has_new_snapshot = false;
-       m_perf.snapshot_apply_time_total += snapshot_timer.getElapsedTime();
+		m_perf.snapshot_apply_time_total += snapshot_timer.getElapsedTime();
 	}
 
 	if (m_world.ShouldReturnToMenu())
@@ -264,11 +258,21 @@ bool MultiplayerGameState::Update(sf::Time dt)
 
         for (std::uint8_t aircraft_identifier : changed_ids)
 		{
-            auto localSlotIt = m_net_to_local_player_index.find(aircraft_identifier);
-			if (localSlotIt == m_net_to_local_player_index.end())
+			int localSlot = -1;
+			for (const auto& kv : m_local_player_to_aircraft_id)
+			{
+				if (kv.second == aircraft_identifier)
+				{
+					localSlot = kv.first;
+					break;
+				}
+			}
+
+			if (localSlot < 0)
 				continue;
 
-			Aircraft* a = m_world.GetPlayerAircraft(localSlotIt->second);
+			Aircraft* a = m_world.GetPlayerAircraft(localSlot);
+
 			if (!a)
 				continue;
 
