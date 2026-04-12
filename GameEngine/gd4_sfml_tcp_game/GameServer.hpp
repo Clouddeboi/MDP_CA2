@@ -37,6 +37,16 @@ public:
 
 	void BroadcastLobbySnapshot();
 
+	struct NetAircraftState
+	{
+		std::uint8_t id;
+		sf::Vector2f position;
+		std::uint8_t hp;
+		std::uint8_t ammo;
+	};
+
+	void CopyAircraftStates(std::vector<NetAircraftState>& outStates) const;
+
 private:
 	struct RemotePeer
 	{

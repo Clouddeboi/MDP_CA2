@@ -756,3 +756,17 @@ int GameServer::FindFreeLobbyPlayerIndex() const
 
     return -1;
 }
+
+void GameServer::CopyAircraftStates(std::vector<NetAircraftState>& outStates) const
+{
+    outStates.clear();
+    for (const auto& kv : m_aircraft_info)
+    {
+        NetAircraftState s;
+        s.id = kv.first;
+        s.position = kv.second.m_position;
+        s.hp = kv.second.m_hitpoints;
+        s.ammo = kv.second.m_missile_ammo;
+        outStates.push_back(s);
+    }
+}
