@@ -48,6 +48,17 @@ MultiplayerGameState::MultiplayerGameState(StateStack& stack, Context context)
 	if (isHost)
 	{
 		m_world.SetLocalNetworkId(0);
+
+		// Push the host's chosen lobby color into the server so it gets broadcast
+		// to all clients when they connect.
+		auto& config = PlayerBindingConfig::GetInstance();
+		auto hostColor = config.GetPlayerColor(0);
+		if (hostColor.has_value() && GetContext().network->GetServer())
+		{
+			GetContext().network->GetServer()->SetAircraftColor(
+				0,
+				hostColor->r, hostColor->g, hostColor->b);
+		}
 	}
 }
 
@@ -158,10 +169,11 @@ bool MultiplayerGameState::Update(sf::Time dt)
 				const sf::Vector2f pos = a->getPosition();
 				const uint8_t hp = static_cast<uint8_t>(std::max(0, std::min(255, a->GetHitPoints())));
 				const uint8_t ammo = 0;
+				const uint8_t anim = m_world.GetLocalPlayerAnimState(0);
 
 				auto* server = GetContext().network->GetServer();
 				if (server)
-					server->UpdateHostAircraftState(pos, hp, ammo);
+					server->UpdateHostAircraftState(pos, hp, ammo, anim);
 			}
 		}
 		// CLIENT path: send via TCP (existing logic)
@@ -227,7 +239,8 @@ bool MultiplayerGameState::Update(sf::Time dt)
 				const std::uint8_t hp = static_cast<std::uint8_t>(std::max(0, std::min(255, a->GetHitPoints())));
 				const std::uint8_t ammo = 0;
 
-				p << aircraft_identifier << pos.x << pos.y << hp << ammo;
+				const std::uint8_t anim = m_world.GetLocalPlayerAnimState(localSlot);
+				p << aircraft_identifier << pos.x << pos.y << hp << ammo << anim;
 
 				auto& last = m_last_sent_local_states[aircraft_identifier];
 				last.position = pos;
@@ -262,7 +275,7 @@ bool MultiplayerGameState::Update(sf::Time dt)
 		const float lerpFactor = std::min(1.f, dt.asSeconds() * 12.f);
 		st.current += delta * lerpFactor;
 
-		m_world.UpdateNetworkActorState(id, st.current, st.hp, st.ammo);
+		m_world.UpdateNetworkActorState(id, st.current, st.hp, st.ammo, st.anim);
 	}
 	m_perf.interp_time_total += interp_timer.getElapsedTime();
 
@@ -431,7 +444,7 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 		for (std::uint8_t i = 0; i < count; ++i)
 		{
 			NetActorState s;
-			if (!(packet >> s.id >> s.x >> s.y >> s.hp >> s.ammo))
+			if (!(packet >> s.id >> s.x >> s.y >> s.hp >> s.ammo >> s.anim))
 				return;
 
 			m_latest_snapshot.push_back(s);
@@ -448,6 +461,22 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 		}
 
 		m_has_new_snapshot = true;
+	}
+	break;
+	case Server::PacketType::kPlayerColorSync:
+	{
+		std::uint8_t id = 0, r = 0, g = 0, b = 0;
+		if (!(packet >> id >> r >> g >> b))
+			return;
+
+		const sf::Color color(r, g, b);
+
+		// Store in global config so it survives round resets
+		PlayerBindingConfig::GetInstance().SetPlayerColor(
+			static_cast<int>(id), color);
+
+		// Apply immediately to the live aircraft
+		m_world.SetNetworkActorColor(id, color);
 	}
 	break;
 

@@ -37,12 +37,17 @@ public:
 
 	void BroadcastLobbySnapshot();
 
+	void UpdateHostAircraftState(const sf::Vector2f& pos, uint8_t hp, uint8_t ammo, uint8_t anim = 0);
+	void SetAircraftColor(uint8_t id, uint8_t r, uint8_t g, uint8_t b);
+	void BroadcastAllColors();
+
 	struct NetAircraftState
 	{
 		std::uint8_t id;
 		sf::Vector2f position;
 		std::uint8_t hp;
 		std::uint8_t ammo;
+		std::uint8_t anim = 0;
 	};
 
 	void CopyAircraftStates(std::vector<NetAircraftState>& outStates) const;
@@ -77,6 +82,12 @@ private:
 		uint8_t m_hitpoints;
 		uint8_t m_missile_ammo;
 		std::map<uint8_t, bool> m_real_time_actions;
+
+		uint8_t m_color_r = 255;
+		uint8_t m_color_g = 255;
+		uint8_t m_color_b = 255;
+
+		uint8_t m_anim = 0;
 	};
 
 	typedef std::unique_ptr<RemotePeer> PeerPtr;

@@ -669,6 +669,11 @@ void Aircraft::UpdateCurrent(sf::Time dt, CommandQueue& commands)
 
 void Aircraft::CheckProjectileLaunch(sf::Time dt, CommandQueue& commands)
 {
+	// Remote/network actors have physics disabled — they must not fire locally.
+	// Shooting is simulated on the host and replicated via snapshots only.
+	if (!IsUsingPhysics() && m_player_id >= 0)
+		return;
+
 	if (!IsAllied())
 	{
 		Fire();
@@ -683,12 +688,10 @@ void Aircraft::CheckProjectileLaunch(sf::Time dt, CommandQueue& commands)
 	}
 	else if (m_fire_countdown > sf::Time::Zero)
 	{
-		//Wait, can't fire
 		m_fire_countdown -= dt;
 		m_is_firing = false;
 	}
 
-	//Missile launch
 	if (m_is_launching_missile)
 	{
 		PlayLocalSound(commands, SoundEffect::kLaunchMissile);
@@ -885,4 +888,30 @@ void Aircraft::SetPlayerColor(const sf::Color& color)
 sf::Color Aircraft::GetPlayerColor() const
 {
 	return m_player_color;
+}
+
+void Aircraft::SetRemoteAnimState(std::uint8_t animFlags)
+{
+	if (!m_use_animations) return;
+
+	const bool facingRight = (animFlags & 1u) != 0;
+	const bool isRunning = (animFlags & 2u) != 0;
+
+	m_facing_right = facingRight;
+
+	Animation* desired = isRunning ? &m_run_animation : &m_idle_animation;
+	if (m_current_animation != desired)
+	{
+		m_current_animation = desired;
+		m_current_animation->Restart();
+	}
+
+	// Advance animation time so it doesn't freeze — use a fixed dt
+	m_current_animation->Update(sf::seconds(1.f / 20.f));
+
+	// Apply facing flip
+	if (m_facing_right)
+		m_current_animation->setScale({ 1.f, 1.f });
+	else
+		m_current_animation->setScale({ -1.f, 1.f });
 }

@@ -56,8 +56,11 @@ public:
 	const LevelData& GetCurrentLevelData() const;
 
 	void SpawnNetworkActor(std::uint8_t networkId, const sf::Vector2f& position, const sf::Color& tint = sf::Color::Cyan);
-	void UpdateNetworkActorState(std::uint8_t networkId, const sf::Vector2f& position, std::uint8_t hp, std::uint8_t ammo);
+	void UpdateNetworkActorState(std::uint8_t networkId, const sf::Vector2f& position, std::uint8_t hp, std::uint8_t ammo, std::uint8_t anim = 0);
+	std::uint8_t GetLocalPlayerAnimState(int playerSlot) const;
 	void RemoveNetworkActor(std::uint8_t networkId);
+
+	void SetNetworkActorColor(std::uint8_t networkId, const sf::Color& color);
 
 	void SetLocalNetworkId(int networkId);
 	void SetCollisionEnabled(bool enabled);

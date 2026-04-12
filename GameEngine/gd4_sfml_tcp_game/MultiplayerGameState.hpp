@@ -31,6 +31,8 @@ private:
 		float y = 0.f;
 		std::uint8_t hp = 0;
 		std::uint8_t ammo = 0;
+		// Animation: bit 0 = facing right, bit 1 = is running
+		std::uint8_t anim = 0;
 	};
 
 	struct RemoteInterpState
@@ -39,6 +41,7 @@ private:
 		sf::Vector2f target{ 0.f, 0.f };
 		std::uint8_t hp = 0;
 		std::uint8_t ammo = 0;
+		std::uint8_t anim = 0;
 		bool initialized = false;
 	};
 

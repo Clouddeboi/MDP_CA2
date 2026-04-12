@@ -346,11 +346,14 @@ void GameServer::HandleIncomingPackets(sf::Packet& packet, RemotePeer& receiving
             uint8_t aircraft_identifier;
             uint8_t aircraft_hitpoints;
             uint8_t missile_ammo;
+            uint8_t anim;
             sf::Vector2f aircraft_position;
-            packet >> aircraft_identifier >> aircraft_position.x >> aircraft_position.y >> aircraft_hitpoints >> missile_ammo;
+            packet >> aircraft_identifier >> aircraft_position.x >> aircraft_position.y
+                >> aircraft_hitpoints >> missile_ammo >> anim;
             m_aircraft_info[aircraft_identifier].m_position = aircraft_position;
             m_aircraft_info[aircraft_identifier].m_hitpoints = aircraft_hitpoints;
             m_aircraft_info[aircraft_identifier].m_missile_ammo = missile_ammo;
+            m_aircraft_info[aircraft_identifier].m_anim = anim;
         }
     }
     break;
@@ -506,6 +509,19 @@ void GameServer::HandleIncomingConnections()
         {
             m_peers.emplace_back(PeerPtr(new RemotePeer()));
         }
+
+		// Immediately send all current player colors to the new client
+		// so their remote actors are tinted correctly.
+		for (const auto& kv : m_aircraft_info)
+		{
+			sf::Packet colorPacket;
+			colorPacket << static_cast<uint8_t>(Server::PacketType::kPlayerColorSync);
+			colorPacket << kv.first
+				<< kv.second.m_color_r
+				<< kv.second.m_color_g
+				<< kv.second.m_color_b;
+			m_peers[m_connected_players]->m_socket.send(colorPacket);
+		}
     }
 }
 
@@ -632,7 +648,7 @@ void GameServer::UpdateClientState()
     for (uint8_t id : playerIds)
     {
         const auto& a = m_aircraft_info[id];
-        p << id << a.m_position.x << a.m_position.y << a.m_hitpoints << a.m_missile_ammo;
+        p << id << a.m_position.x << a.m_position.y << a.m_hitpoints << a.m_missile_ammo << a.m_anim;
     }
 
     SendToAll(p);
@@ -805,12 +821,13 @@ void GameServer::CopyAircraftStates(std::vector<NetAircraftState>& outStates) co
     }
 }
 
-void GameServer::UpdateHostAircraftState(const sf::Vector2f& pos, uint8_t hp, uint8_t ammo)
+void GameServer::UpdateHostAircraftState(const sf::Vector2f& pos, uint8_t hp, uint8_t ammo, uint8_t anim)
 {
     std::scoped_lock lock(m_aircraft_mutex);
     m_aircraft_info[0].m_position = pos;
     m_aircraft_info[0].m_hitpoints = hp;
     m_aircraft_info[0].m_missile_ammo = ammo;
+    m_aircraft_info[0].m_anim = anim;
 }
 
 void GameServer::PushHostEvent(const HostEvent& event)
@@ -828,4 +845,27 @@ bool GameServer::PollHostEvent(HostEvent& outEvent)
     outEvent = m_host_events.front();
     m_host_events.pop_front();
     return true;
+}
+
+void GameServer::SetAircraftColor(uint8_t id, uint8_t r, uint8_t g, uint8_t b)
+{
+    std::scoped_lock lock(m_aircraft_mutex);
+    m_aircraft_info[id].m_color_r = r;
+    m_aircraft_info[id].m_color_g = g;
+    m_aircraft_info[id].m_color_b = b;
+}
+
+void GameServer::BroadcastAllColors()
+{
+    std::scoped_lock lock(m_aircraft_mutex);
+    for (const auto& kv : m_aircraft_info)
+    {
+        sf::Packet p;
+        p << static_cast<uint8_t>(Server::PacketType::kPlayerColorSync);
+        p << kv.first
+            << kv.second.m_color_r
+            << kv.second.m_color_g
+            << kv.second.m_color_b;
+        SendToAll(p);
+    }
 }

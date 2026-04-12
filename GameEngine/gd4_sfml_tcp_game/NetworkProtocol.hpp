@@ -23,7 +23,8 @@ namespace Server
 		kLobbyStartGame, //no payload
 		kLobbyPlayerLeft,
 		kLobbySnapshot,
-		kLobbyAssignedIndex
+		kLobbyAssignedIndex,
+		kPlayerColorSync
 	};
 }
 

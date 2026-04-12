@@ -481,19 +481,38 @@ void World::RespawnPlayers()
 
 		std::cout << "Player " << (i + 1) << " respawned!" << std::endl;
 	}
+
+	// Pre-restore remote actors too — the snapshot will correct position/HP within
+	// one tick but this prevents a single-frame round-over flicker.
+	for (auto& kv : m_network_actors)
+	{
+		Aircraft* actor = kv.second;
+		if (actor && actor->IsDestroyed())
+		{
+			actor->Repair(100);
+		}
+	}
 }
 
 //Helper function to count how many players are still alive
 int World::CountAlivePlayers() const
 {
 	int count = 0;
+
+	// Count physics-owned local players
 	for (const Aircraft* player : m_player_aircrafts)
 	{
-		if (player && !player->IsDestroyed())
-		{
-			count++;
-		}
+		if (player && player->IsUsingPhysics() && !player->IsDestroyed())
+			++count;
 	}
+
+	// Count remote network actors (driven by snapshots, not local physics)
+	for (const auto& kv : m_network_actors)
+	{
+		if (kv.second && !kv.second->IsDestroyed())
+			++count;
+	}
+
 	return count;
 }
 
@@ -2002,7 +2021,7 @@ void World::SpawnNetworkActor(std::uint8_t networkId, const sf::Vector2f& positi
 		<< " slot=" << playerSlot << " pos=(" << position.x << "," << position.y << ")\n";
 }
 
-void World::UpdateNetworkActorState(std::uint8_t networkId, const sf::Vector2f& position, std::uint8_t hp, std::uint8_t ammo)
+void World::UpdateNetworkActorState(std::uint8_t networkId, const sf::Vector2f& position, std::uint8_t hp, std::uint8_t ammo, std::uint8_t anim)
 {
 	auto it = m_network_actors.find(networkId);
 	if (it == m_network_actors.end())
@@ -2015,11 +2034,33 @@ void World::UpdateNetworkActorState(std::uint8_t networkId, const sf::Vector2f& 
 		return;
 	}
 
-	//Position-only sync here (safer). Avoid Damage/Repair to prevent destroy/removal races.
 	actor->setPosition(position);
+	actor->SetRemoteAnimState(anim);
 
-	(void)hp;
-	(void)ammo;
+	// Sync health from authoritative host snapshot.
+	// Use Repair/Damage delta so audio/visual hit effects still fire.
+	const int currentHp = actor->GetHitPoints();
+	const int targetHp = static_cast<int>(hp);
+
+	if (targetHp > currentHp)
+	{
+		actor->Repair(targetHp - currentHp);
+	}
+	else if (targetHp < currentHp && targetHp > 0)
+	{
+		actor->Damage(currentHp - targetHp);
+	}
+	else if (targetHp <= 0 && !actor->IsDestroyed())
+	{
+		actor->Destroy();
+	}
+	else if (targetHp > 0 && actor->IsDestroyed())
+	{
+		// Round reset — server says this actor is alive again
+		actor->Repair(targetHp);
+	}
+
+	(void)ammo; // ammo sync can be added similarly if needed
 }
 
 void World::RemoveNetworkActor(std::uint8_t networkId)
@@ -2062,27 +2103,15 @@ void World::GenerateSpawnPositions()
 	const float edge_padding = 150.f;
 	const float usable_width = arena_width - (2.f * edge_padding);
 
-	if (m_player_count == 1)
-	{
-		//Single player spawns in center
-		m_player_spawn_positions.push_back({ arena_width / 2.f, spawn_y });
-	}
-	else if (m_player_count == 2)
-	{
-		//Two players spawn on left and right
-		m_player_spawn_positions.push_back({ edge_padding, spawn_y });
-		m_player_spawn_positions.push_back({ arena_width - edge_padding, spawn_y });
-	}
-	else
-	{
-		//Distribute players evenly across the arena
-		float spacing = usable_width / static_cast<float>(m_player_count - 1);
+	// Always pre-generate kMaxPlayers slots so any network ID is always valid.
+	// Positions are spread evenly; for 2-player the natural L/R split is preserved.
+	constexpr int kGenerateSlots = 20;
+	const float spacing = usable_width / static_cast<float>(kGenerateSlots - 1);
 
-		for (int i = 0; i < m_player_count; ++i)
-		{
-			float x_pos = edge_padding + (spacing * i);
-			m_player_spawn_positions.push_back({ x_pos, spawn_y });
-		}
+	for (int i = 0; i < kGenerateSlots; ++i)
+	{
+		float x_pos = edge_padding + (spacing * i);
+		m_player_spawn_positions.push_back({ x_pos, spawn_y });
 	}
 }
 
@@ -2289,4 +2318,35 @@ void World::SetLocalNetworkId(int networkId)
 		if (networkId < static_cast<int>(m_player_spawn_positions.size()))
 			m_player_aircrafts[0]->setPosition(m_player_spawn_positions[networkId]);
 	}
+}
+
+void World::SetNetworkActorColor(std::uint8_t networkId, const sf::Color& color)
+{
+	// Apply to floating network actor (if it exists)
+	auto it = m_network_actors.find(networkId);
+	if (it != m_network_actors.end() && it->second)
+		it->second->SetPlayerColor(color);
+
+	// Also apply to the m_player_aircrafts slot if this is a non-floating remote
+	int slot = static_cast<int>(networkId);
+	if (slot < static_cast<int>(m_player_aircrafts.size())
+		&& m_player_aircrafts[slot]
+		&& !m_player_aircrafts[slot]->IsUsingPhysics())
+	{
+		m_player_aircrafts[slot]->SetPlayerColor(color);
+	}
+}
+
+std::uint8_t World::GetLocalPlayerAnimState(int playerSlot) const
+{
+	if (playerSlot < 0 || playerSlot >= static_cast<int>(m_player_aircrafts.size()))
+		return 0;
+	const Aircraft* a = m_player_aircrafts[playerSlot];
+	if (!a) return 0;
+
+	const sf::Vector2f vel = a->GetVelocity();
+	const bool facingRight = vel.x >= 0.f; // mirrors Aircraft::UpdateCurrent logic
+	const bool isRunning = std::abs(vel.x) > 10.f;
+
+	return static_cast<std::uint8_t>((facingRight ? 1u : 0u) | (isRunning ? 2u : 0u));
 }
