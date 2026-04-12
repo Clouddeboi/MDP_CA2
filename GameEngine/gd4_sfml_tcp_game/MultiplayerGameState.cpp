@@ -44,6 +44,11 @@ MultiplayerGameState::MultiplayerGameState(StateStack& stack, Context context)
 	}
 
 	m_world.SetCollisionEnabled(true);
+
+	if (isHost)
+	{
+		m_world.SetLocalNetworkId(0);
+	}
 }
 
 void MultiplayerGameState::Draw()
@@ -392,30 +397,17 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 		if (!(packet >> aircraftId >> x >> y))
 			return;
 
-		//Assign this authoritative id to first unassigned local slot
-		int assignedLocalSlot = -1;
+		// Map local slot 0 (the one aircraft we built) to the server-assigned ID.
+		m_local_player_to_aircraft_id[0] = aircraftId;
+		m_net_to_local_player_index[aircraftId] = 0;
 
-		for (size_t i = 0; i < m_players.size(); ++i)
-		{
-			if (m_local_player_to_aircraft_id.find(static_cast<int>(i)) == m_local_player_to_aircraft_id.end())
-			{
-				assignedLocalSlot = static_cast<int>(i);
-				break;
-			}
-		}
+		// Tell the world what network ID this machine owns.
+		// World::SetLocalNetworkId repositions the local aircraft to spawn[aircraftId]
+		// and stores the ID so future respawns use the right slot.
+		m_world.SetLocalNetworkId(static_cast<int>(aircraftId));
 
-		//Fallback to slot 0 if all already mapped
-		if (assignedLocalSlot < 0)
-			assignedLocalSlot = 0;
-
-		m_local_player_to_aircraft_id[assignedLocalSlot] = aircraftId;
-		m_net_to_local_player_index[aircraftId] = assignedLocalSlot;
-
-		Aircraft* a = m_world.GetPlayerAircraft(assignedLocalSlot);
-		if (a)
-		{
-			a->setPosition({ x, y });
-		}
+		std::cout << "[MP] kSpawnSelf: local aircraft id=" << static_cast<int>(aircraftId)
+			<< " server pos=(" << x << ", " << y << ")\n";
 	}
 	break;
 

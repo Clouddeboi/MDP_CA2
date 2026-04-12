@@ -59,6 +59,7 @@ public:
 	void UpdateNetworkActorState(std::uint8_t networkId, const sf::Vector2f& position, std::uint8_t hp, std::uint8_t ammo);
 	void RemoveNetworkActor(std::uint8_t networkId);
 
+	void SetLocalNetworkId(int networkId);
 	void SetCollisionEnabled(bool enabled);
 
 private:
@@ -213,6 +214,8 @@ private:
 	std::unordered_map<std::uint8_t, Aircraft*> m_network_actors;
 
 	bool m_collision_enabled = true;
+
+	int m_local_network_id = 0;
 
 	std::vector<SceneNode*> m_collidables;
 };

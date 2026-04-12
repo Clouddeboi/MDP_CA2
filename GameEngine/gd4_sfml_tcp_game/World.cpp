@@ -1046,10 +1046,12 @@ void World::BuildScene()
 	{
 		AircraftType player_type = AircraftType::kEagle;
 
+		// Local aircraft always uses player_id 0 (so Player(0) commands reach it).
+		// Its *spawn position* is determined by the server-assigned network ID so that
+		// host spawns at slot 0 and the first client at slot 1, etc.
 		std::unique_ptr<Aircraft> player(new Aircraft(player_type, m_textures, m_fonts, i));
 		Aircraft* player_aircraft = player.get();
 
-		//Apply player color from config
 		auto& config = PlayerBindingConfig::GetInstance();
 		auto playerColor = config.GetPlayerColor(i);
 		if (playerColor.has_value())
@@ -1058,24 +1060,22 @@ void World::BuildScene()
 		}
 		else
 		{
-			//Fallback to default colors
 			std::vector<sf::Color> default_colors = {
 				sf::Color::Red, sf::Color::Yellow, sf::Color::Blue, sf::Color::Green,
 			};
 			if (i < static_cast<int>(default_colors.size()))
-			{
 				player_aircraft->SetPlayerColor(default_colors[i]);
-			}
 		}
 
-		if (i < static_cast<int>(m_player_spawn_positions.size()))
-		{
-			player_aircraft->setPosition(m_player_spawn_positions[i]);
-		}
+		// Use m_local_network_id to select the spawn position for this machine's player.
+		// For single-player / host: m_local_network_id = 0 → spawn[0].
+		// For client: m_local_network_id will be set by kSpawnSelf later, but we also
+		// reposition in SetLocalNetworkId(), so this is a safe default.
+		const int spawnSlot = m_local_network_id + i;
+		if (spawnSlot < static_cast<int>(m_player_spawn_positions.size()))
+			player_aircraft->setPosition(m_player_spawn_positions[spawnSlot]);
 		else
-		{
-			player_aircraft->setPosition({ 200.f + (i * 100.f), 0.f });
-		}
+			player_aircraft->setPosition({ 200.f + (spawnSlot * 100.f), 0.f });
 
 		m_scene_layers[static_cast<int>(SceneLayers::kUpperAir)]->AttachChild(std::move(player));
 
@@ -1928,33 +1928,57 @@ void World::SpawnNetworkActor(std::uint8_t networkId, const sf::Vector2f& positi
 	if (m_network_actors.find(networkId) != m_network_actors.end())
 		return;
 
-	// Determine which player slot this remote actor occupies.
-	// networkId 0 = host (already in slot 0), networkId 1 = first client (slot 1), etc.
 	int playerSlot = static_cast<int>(networkId);
 
-	// Resize player tracking structures to accommodate the new slot
+	// CRITICAL: never overwrite a slot that already holds a locally-controlled
+	// physics aircraft.  On the client, slot 0 is the local player; the host's
+	// remote actor (also networkId 0 from the server's perspective) must NOT
+	// replace it.  The remote actor still lives in m_network_actors for snapshot
+	// interpolation — it just does not get a slot in m_player_aircrafts.
+	bool slotOccupiedByLocal = (playerSlot < static_cast<int>(m_player_aircrafts.size()))
+		&& m_player_aircrafts[playerSlot] != nullptr
+		&& m_player_aircrafts[playerSlot]->IsUsingPhysics();
+
+	if (slotOccupiedByLocal)
+	{
+		// Still track in m_network_actors so snapshot interpolation works.
+		// Create a free-floating actor that is NOT registered in m_player_aircrafts.
+		std::unique_ptr<Aircraft> actor(new Aircraft(AircraftType::kEagle, m_textures, m_fonts, playerSlot));
+		Aircraft* actorPtr = actor.get();
+
+		actorPtr->SetPlayerColor(tint);
+		actorPtr->setPosition(position);
+		actorPtr->SetUsePhysics(false);
+		actorPtr->SetVelocity(0.f, 0.f);
+
+		m_scene_layers[static_cast<int>(SceneLayers::kUpperAir)]->AttachChild(std::move(actor));
+		m_network_actors[networkId] = actorPtr;
+		// Do NOT write m_player_aircrafts[playerSlot] — the local aircraft stays there.
+
+		std::cout << "[MP] SpawnNetworkActor id=" << static_cast<int>(networkId)
+			<< " slot=" << playerSlot << " (slot occupied by local — floating actor only)\n";
+		return;
+	}
+
+	// Normal remote actor path (slot is free — e.g. host spawning client's actor).
 	while (static_cast<int>(m_player_aircrafts.size()) <= playerSlot)
 		m_player_aircrafts.push_back(nullptr);
 
 	while (static_cast<int>(m_player_scores.size()) <= playerSlot)
 		m_player_scores.push_back(0);
 
-	// Use player_id = playerSlot so GetCategory() returns the correct kPlayerN bitmask
 	std::unique_ptr<Aircraft> actor(new Aircraft(AircraftType::kEagle, m_textures, m_fonts, playerSlot));
 	Aircraft* actorPtr = actor.get();
 
 	actorPtr->SetPlayerColor(tint);
 	actorPtr->setPosition(position);
-	actorPtr->SetUsePhysics(false);   // physics driven by snapshot interpolation
+	actorPtr->SetUsePhysics(false);
 	actorPtr->SetVelocity(0.f, 0.f);
 
 	m_scene_layers[static_cast<int>(SceneLayers::kUpperAir)]->AttachChild(std::move(actor));
 	m_network_actors[networkId] = actorPtr;
-
-	// Register in player list so game logic (rounds, camera, scoring) sees both players
 	m_player_aircrafts[playerSlot] = actorPtr;
 
-	// Add a score display for this player if one doesn't exist yet
 	if (playerSlot >= static_cast<int>(m_score_displays.size()))
 	{
 		const float score_text_size = 2.f;
@@ -1973,6 +1997,9 @@ void World::SpawnNetworkActor(std::uint8_t networkId, const sf::Vector2f& positi
 	}
 
 	m_player_count = static_cast<int>(m_player_aircrafts.size());
+
+	std::cout << "[MP] SpawnNetworkActor id=" << static_cast<int>(networkId)
+		<< " slot=" << playerSlot << " pos=(" << position.x << "," << position.y << ")\n";
 }
 
 void World::UpdateNetworkActorState(std::uint8_t networkId, const sf::Vector2f& position, std::uint8_t hp, std::uint8_t ammo)
@@ -2248,4 +2275,18 @@ void World::RebuildCollidablesList()
 {
 	m_collidables.clear();
 	m_scenegraph.CollectCollidables(m_collidables);
+}
+
+void World::SetLocalNetworkId(int networkId)
+{
+	m_local_network_id = networkId;
+
+	//Reposition the already-built local aircraft to the correct spawn slot.
+	//kSpawnSelf arrives after BuildScene, so we move the aircraft here rather
+	//Than rebuilding the scene.
+	if (!m_player_aircrafts.empty() && m_player_aircrafts[0])
+	{
+		if (networkId < static_cast<int>(m_player_spawn_positions.size()))
+			m_player_aircrafts[0]->setPosition(m_player_spawn_positions[networkId]);
+	}
 }
