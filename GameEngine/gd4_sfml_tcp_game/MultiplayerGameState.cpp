@@ -307,7 +307,7 @@ bool MultiplayerGameState::Update(sf::Time dt)
 
 		// Smoothly blend the rendered position toward the prediction.
 		// 15x per-second is snappy enough to correct errors without snapping.
-		const float blend = std::min(1.f, dt.asSeconds() * 15.f);
+		const float blend = std::min(1.f, dt.asSeconds() * 20.f);
 		st.current += (deadReckoned - st.current) * blend;
 
 		m_world.UpdateNetworkActorState(id, st.current, st.hp, st.ammo, st.anim);
