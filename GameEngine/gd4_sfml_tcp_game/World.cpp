@@ -2295,17 +2295,26 @@ void World::SelectNextPreloadedLevel()
 
 void World::ClearStaticLevelGeometry()
 {
-	Command clearPlatforms;
-	clearPlatforms.category = static_cast<int>(ReceiverCategories::kPlatform);
-	clearPlatforms.action = DerivedAction<Entity>([](Entity& e, sf::Time) { e.Destroy(); });
+	SceneNode* layer = m_scene_layers[static_cast<int>(SceneLayers::kUpperAir)];
+	if (!layer) return;
 
-	Command clearBoxes;
-	clearBoxes.category = static_cast<int>(ReceiverCategories::kBox);
-	clearBoxes.action = DerivedAction<Entity>([](Entity& e, sf::Time) { e.Destroy(); });
+	for (const auto& child : layer->GetChildren())
+	{
+		if (!child) continue;
 
-	m_scenegraph.OnCommand(clearPlatforms, sf::Time::Zero);
-	m_scenegraph.OnCommand(clearBoxes, sf::Time::Zero);
-	m_scenegraph.RemoveWrecks();
+		const unsigned int cat = child->GetCategory();
+		const bool isPlatform = (cat & static_cast<unsigned int>(ReceiverCategories::kPlatform)) != 0;
+		const bool isBox = (cat & static_cast<unsigned int>(ReceiverCategories::kBox)) != 0;
+		// SpriteNodes (visual tiles) have kNone and are not Aircraft/Player/etc.
+		// Guard: only remove nodes that have NO meaningful game category
+		const bool isVisualTile = (cat == static_cast<unsigned int>(ReceiverCategories::kNone));
+
+		if (isPlatform || isBox || isVisualTile)
+			child->MarkForRemoval();
+	}
+
+	layer->RemoveWrecks();
+	RebuildCollidablesList();
 }
 	
 void World::BuildMergedPlatformsFromLevel()

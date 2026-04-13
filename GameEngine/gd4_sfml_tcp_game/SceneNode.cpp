@@ -238,7 +238,7 @@ bool SceneNode::IsDestroyed() const
 
 bool SceneNode::IsMarkedForRemoval() const
 {
-    return IsDestroyed();
+    return m_marked_for_removal || IsDestroyed();
 }
 
 float Distance(const SceneNode& lhs, const SceneNode& rhs)
@@ -304,4 +304,14 @@ bool SceneNode::CanPotentiallyCollide(unsigned int a, unsigned int b)
         return true;
 
     return false;
+}
+
+void SceneNode::MarkForRemoval()
+{
+    m_marked_for_removal = true;
+}
+
+const std::vector<SceneNode::Ptr>& SceneNode::GetChildren() const
+{
+    return m_children;
 }
