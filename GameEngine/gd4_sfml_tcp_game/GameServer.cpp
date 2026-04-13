@@ -518,9 +518,17 @@ void GameServer::HandleIncomingConnections()
         {
             sf::Packet hostInfoPacket;
             hostInfoPacket << static_cast<uint8_t>(Server::PacketType::kPlayerConnect);
-            hostInfoPacket << static_cast<uint8_t>(0)
-                << m_aircraft_info[0].m_position.x
-                << m_aircraft_info[0].m_position.y;
+            hostInfoPacket << static_cast<uint8_t>(0);
+
+            // Use the stored position — but guard against it being {0,0} (not yet updated)
+            sf::Vector2f hostPos = m_aircraft_info[0].m_position;
+            if (hostPos.x == 0.f && hostPos.y == 0.f)
+            {
+                // Host hasn't sent a state update yet — use the known spawn slot 0 position
+                hostPos = { m_battlefield_rect.size.x / 2.f,
+                            m_battlefield_rect.position.y + m_battlefield_rect.size.y / 2.f };
+            }
+            hostInfoPacket << hostPos.x << hostPos.y;
             m_peers[m_connected_players]->m_socket.send(hostInfoPacket);
         }
 

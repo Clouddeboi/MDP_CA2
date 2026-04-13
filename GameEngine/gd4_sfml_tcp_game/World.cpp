@@ -293,8 +293,18 @@ void World::UpdateCameraZoom(sf::Time dt)
 		auto it = m_network_actors.find(id);
 		if (it == m_network_actors.end()) continue;
 		Aircraft* actor = it->second;
-		if (actor && !actor->IsDestroyed())
-			alive_positions.push_back(actor->getPosition());
+		if (!actor || actor->IsDestroyed()) continue;
+
+		const sf::Vector2f pos = actor->getPosition();
+
+		// Skip actors that haven't received a valid position yet
+		// (position {0,0} means the actor was just spawned and the
+		//  first snapshot hasn't arrived — including it would cause
+		//  the camera to zoom out to fit the entire level)
+		if (pos.x == 0.f && pos.y == 0.f)
+			continue;
+
+		alive_positions.push_back(pos);
 	}
 
 	if (alive_positions.empty())
