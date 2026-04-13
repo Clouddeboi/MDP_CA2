@@ -37,8 +37,12 @@ public:
 	void CollectCollidables(std::vector<SceneNode*>& out);
 	static bool CanPotentiallyCollide(unsigned int a, unsigned int b);
 
+	void MarkForRemoval();
+
 	virtual bool IsDestroyed() const;
 	virtual bool IsMarkedForRemoval() const;
+
+	const std::vector<SceneNode::Ptr>& GetChildren() const;
 
 private:
 	virtual void UpdateCurrent(sf::Time dt, CommandQueue& commands);
@@ -57,6 +61,7 @@ private:
 	std::vector<Ptr> m_children;
 	SceneNode* m_parent;
 	ReceiverCategories m_default_category;
+	bool m_marked_for_removal = false;
 };
 float Distance(const SceneNode& lhs, const SceneNode& rhs);
 bool Collision(const SceneNode& lhs, const SceneNode& rhs);

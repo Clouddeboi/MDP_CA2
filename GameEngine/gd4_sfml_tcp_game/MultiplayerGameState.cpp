@@ -383,11 +383,28 @@ bool MultiplayerGameState::Update(sf::Time dt)
 	// Host: broadcast updated scores to client whenever they change
 	if (GetContext().network && GetContext().network->IsHosting())
 	{
-		std::vector<int> updated_scores;
-		if (m_world.PollScoresChanged(updated_scores))
+		// Broadcast updated scores whenever they change (kill, round end, etc.)
+		std::vector<int> updatedScores;
+		if (m_world.PollScoresChanged(updatedScores))
 		{
 			if (auto* srv = GetContext().network->GetServer())
-				srv->BroadcastScores(updated_scores);
+			{
+				srv->BroadcastScores(updatedScores);
+				std::cout << "[MP] BroadcastScores: ";
+				for (int i = 0; i < static_cast<int>(updatedScores.size()); ++i)
+					std::cout << "P" << i << "=" << updatedScores[i] << " ";
+				std::cout << "\n";
+			}
+		}
+
+		// Broadcast new round level index after StartNewRound picks a level
+		uint8_t levelIndex = 0;
+		if (m_world.PollNewRoundBroadcast(levelIndex))
+		{
+			if (auto* srv = GetContext().network->GetServer())
+				srv->BroadcastNewRound(levelIndex);
+
+			std::cout << "[MP] BroadcastNewRound level=" << (int)levelIndex << "\n";
 		}
 	}
 
@@ -517,6 +534,17 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 				GetContext().network->SendGameplayPacket(p);
 			}
 		}
+	}
+	break;
+
+	case Server::PacketType::kNewRound:
+	{
+		uint8_t levelIndex = 0;
+		if (!(packet >> levelIndex))
+			return;
+
+		std::cout << "[MP] kNewRound received: level=" << (int)levelIndex << "\n";
+		m_world.StartNewRoundWithLevel(levelIndex);
 	}
 	break;
 

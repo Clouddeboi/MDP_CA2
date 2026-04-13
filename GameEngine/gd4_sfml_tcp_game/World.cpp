@@ -134,7 +134,15 @@ void World::Update(sf::Time dt)
 
 		if (m_round_restart_timer >= m_round_restart_delay)
 		{
-			StartNewRound();
+			if (m_network_round_authority)   // host or solo: self-start
+			{
+				StartNewRound();             // existing — picks level, increments round
+
+				// Signal to MultiplayerGameState to broadcast the chosen level
+				m_new_round_level_index = static_cast<uint8_t>(m_current_level_index);
+				m_new_round_broadcast_ready = true;
+			}
+			// else: client waits — StartNewRoundWithLevel called via kNewRound packet
 		}
 		return;
 	}
@@ -528,6 +536,60 @@ void World::StartNewRound()
 	m_scenegraph.RemoveWrecks();
 }
 
+void World::SetNetworkRoundAuthority(bool isAuthority)
+{
+	m_network_round_authority = isAuthority;
+}
+
+uint8_t World::GetCurrentLevelIndex() const
+{
+	return static_cast<uint8_t>(m_current_level_index);
+}
+
+bool World::PollNewRoundBroadcast(uint8_t& outLevelIndex)
+{
+	if (!m_new_round_broadcast_ready)
+		return false;
+	outLevelIndex = m_new_round_level_index;
+	m_new_round_broadcast_ready = false;
+	return true;
+}
+
+void World::StartNewRoundWithLevel(uint8_t levelIndex)
+{
+	if (IsGameOver()) return;
+
+	m_current_round++;
+	m_round_over = false;
+	m_round_restart_timer = sf::Time::Zero;
+	m_camera_state_saved = false;
+
+	if (!m_preloaded_levels.empty() && levelIndex < static_cast<uint8_t>(m_preloaded_levels.size()))
+	{
+		m_current_level_index = static_cast<std::size_t>(levelIndex);
+		ApplyPreloadedLevel(m_current_level_index);
+		ClearStaticLevelGeometry();
+		BuildSceneFromLevel();
+		LoadSpawnPositionsFromLevel();
+	}
+
+	RespawnPlayers();
+	UpdateScoreDisplay();
+
+	Command clearProjectiles;
+	clearProjectiles.category = static_cast<int>(ReceiverCategories::kProjectile);
+	clearProjectiles.action = DerivedAction<Entity>([](Entity& e, sf::Time) { e.Destroy(); });
+	m_command_queue.Push(clearProjectiles);
+
+	Command clearPickups;
+	clearPickups.category = static_cast<int>(ReceiverCategories::kPickup);
+	clearPickups.action = DerivedAction<Entity>([](Entity& e, sf::Time) { e.Destroy(); });
+	m_command_queue.Push(clearPickups);
+	m_pickup_spawn_timer = sf::Time::Zero;
+
+	m_scenegraph.RemoveWrecks();
+}
+
 void World::RespawnPlayers()
 {
 	for (size_t i = 0; i < m_player_aircrafts.size(); ++i)
@@ -647,17 +709,33 @@ void World::UpdateRoundOverlay()
 	sf::Vector2f view_center(view_size.x / 2.f, view_size.y / 2.f);
 
 	std::string message;
-	int last_round_winner = -1;
+	int last_round_winner = -1;         // display number (1-based slot), -1 = draw
 	int alive_count = CountAlivePlayers();
 
 	if (alive_count == 1)
 	{
+		// Check physics-owned local players first
 		for (size_t i = 0; i < m_player_aircrafts.size(); ++i)
 		{
-			if (m_player_aircrafts[i] && !m_player_aircrafts[i]->IsDestroyed())
+			Aircraft* a = m_player_aircrafts[i];
+			if (a && a->IsUsingPhysics() && !a->IsDestroyed())
 			{
-				last_round_winner = static_cast<int>(i);
+				// In network mode, the local player's display slot = m_local_network_id
+				last_round_winner = m_is_network_mode ? m_local_network_id : static_cast<int>(i);
 				break;
+			}
+		}
+
+		// If not found among local physics actors, check remote network actors
+		if (last_round_winner < 0)
+		{
+			for (const auto& kv : m_network_actors)
+			{
+				if (kv.second && !kv.second->IsDestroyed())
+				{
+					last_round_winner = static_cast<int>(kv.first); // network ID = display slot
+					break;
+				}
 			}
 		}
 	}
@@ -665,7 +743,6 @@ void World::UpdateRoundOverlay()
 	if (last_round_winner >= 0)
 	{
 		message = "Player " + std::to_string(last_round_winner + 1) + " Wins!";
-		// Temporary color assignment - will use player colors in commit 2
 		if (last_round_winner == 0)
 			m_round_over_text->setFillColor(sf::Color::Red);
 		else if (last_round_winner == 1)
@@ -682,24 +759,22 @@ void World::UpdateRoundOverlay()
 	m_round_over_text->setString(message);
 
 	sf::FloatRect text_bounds = m_round_over_text->getLocalBounds();
-	m_round_over_text->setOrigin({ text_bounds.position.x + text_bounds.size.x / 2.f, text_bounds.position.y + text_bounds.size.y / 2.f });
-	m_round_over_text->setPosition({ view_center.x, view_center.y - 100.f });//Fixed screen position
+	m_round_over_text->setOrigin({ text_bounds.position.x + text_bounds.size.x / 2.f,
+								   text_bounds.position.y + text_bounds.size.y / 2.f });
+	m_round_over_text->setPosition({ view_center.x, view_center.y - 100.f });
 
 	float remaining_time = (m_round_restart_delay - m_round_restart_timer).asSeconds();
 	int seconds = static_cast<int>(std::ceil(remaining_time));
 
 	if (IsGameOver())
-	{
 		m_round_countdown_text->setString("Game Over!");
-	}
 	else
-	{
 		m_round_countdown_text->setString("Next round in " + std::to_string(seconds) + "...");
-	}
 
 	sf::FloatRect countdown_bounds = m_round_countdown_text->getLocalBounds();
-	m_round_countdown_text->setOrigin({ countdown_bounds.position.x + countdown_bounds.size.x / 2.f, countdown_bounds.position.y + countdown_bounds.size.y / 2.f });
-	m_round_countdown_text->setPosition({ view_center.x, view_center.y + 50.f });//Fixed screen position
+	m_round_countdown_text->setOrigin({ countdown_bounds.position.x + countdown_bounds.size.x / 2.f,
+										countdown_bounds.position.y + countdown_bounds.size.y / 2.f });
+	m_round_countdown_text->setPosition({ view_center.x, view_center.y + 50.f });
 }
 
 void World::SetTotalNetworkPlayerCount(int count)
@@ -2295,17 +2370,26 @@ void World::SelectNextPreloadedLevel()
 
 void World::ClearStaticLevelGeometry()
 {
-	Command clearPlatforms;
-	clearPlatforms.category = static_cast<int>(ReceiverCategories::kPlatform);
-	clearPlatforms.action = DerivedAction<Entity>([](Entity& e, sf::Time) { e.Destroy(); });
+	SceneNode* layer = m_scene_layers[static_cast<int>(SceneLayers::kUpperAir)];
+	if (!layer) return;
 
-	Command clearBoxes;
-	clearBoxes.category = static_cast<int>(ReceiverCategories::kBox);
-	clearBoxes.action = DerivedAction<Entity>([](Entity& e, sf::Time) { e.Destroy(); });
+	for (const auto& child : layer->GetChildren())
+	{
+		if (!child) continue;
 
-	m_scenegraph.OnCommand(clearPlatforms, sf::Time::Zero);
-	m_scenegraph.OnCommand(clearBoxes, sf::Time::Zero);
-	m_scenegraph.RemoveWrecks();
+		const unsigned int cat = child->GetCategory();
+		const bool isPlatform = (cat & static_cast<unsigned int>(ReceiverCategories::kPlatform)) != 0;
+		const bool isBox = (cat & static_cast<unsigned int>(ReceiverCategories::kBox)) != 0;
+		// SpriteNodes (visual tiles) have kNone and are not Aircraft/Player/etc.
+		// Guard: only remove nodes that have NO meaningful game category
+		const bool isVisualTile = (cat == static_cast<unsigned int>(ReceiverCategories::kNone));
+
+		if (isPlatform || isBox || isVisualTile)
+			child->MarkForRemoval();
+	}
+
+	layer->RemoveWrecks();
+	RebuildCollidablesList();
 }
 	
 void World::BuildMergedPlatformsFromLevel()
