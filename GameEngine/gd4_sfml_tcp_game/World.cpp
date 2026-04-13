@@ -933,6 +933,8 @@ void World::LoadTextures()
 	m_textures.Load(TextureID::kPlayerIdleAnimation, "Media/Textures/Player/Player_Idle_Spaceman.png");
 	m_textures.Load(TextureID::kPlayerRunAnimation, "Media/Textures/Player/Player_Run_Spaceman.png");
 
+	m_textures.Load(TextureID::kGun, "Media/Textures/spritesheet_default.png");
+
 	m_textures.Load(TextureID::kPlayerGrayscale, "Media/Textures/Player/Wizard_M_Jump.png");
 
 }
