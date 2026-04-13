@@ -17,9 +17,9 @@ std::vector<AircraftData> InitializeAircraftData()
     data[static_cast<int>(AircraftType::kEagle)].m_texture_rect = sf::IntRect({ 576, 320 }, { 16, 21 });
     data[static_cast<int>(AircraftType::kEagle)].m_has_roll_animation = true;
     data[static_cast<int>(AircraftType::kEagle)].m_has_gun = true;
-    data[static_cast<int>(AircraftType::kEagle)].m_gun_texture = TextureID::kEntities;
-    data[static_cast<int>(AircraftType::kEagle)].m_gun_texture_rect = sf::IntRect({ 512, 192 }, { 64, 64 });
-    data[static_cast<int>(AircraftType::kEagle)].m_gun_offset = sf::Vector2f(0.f, -8.f);
+    data[static_cast<int>(AircraftType::kEagle)].m_gun_texture = TextureID::kGun;
+    data[static_cast<int>(AircraftType::kEagle)].m_gun_texture_rect = sf::IntRect({ 0, 0 }, { 32, 32 });
+    data[static_cast<int>(AircraftType::kEagle)].m_gun_offset = sf::Vector2f(0.f, -4.f);
 
     //Player 2
     data[static_cast<int>(AircraftType::kEaglePlayer2)].m_hitpoints = 100;
@@ -30,7 +30,7 @@ std::vector<AircraftData> InitializeAircraftData()
     data[static_cast<int>(AircraftType::kEaglePlayer2)].m_has_roll_animation = true;
     data[static_cast<int>(AircraftType::kEaglePlayer2)].m_has_gun = true;
     data[static_cast<int>(AircraftType::kEaglePlayer2)].m_gun_texture = TextureID::kEntities;
-    data[static_cast<int>(AircraftType::kEaglePlayer2)].m_gun_texture_rect = sf::IntRect({ 512, 192 }, { 64, 64 });
+    data[static_cast<int>(AircraftType::kEaglePlayer2)].m_gun_texture_rect = sf::IntRect({ 0, 0 }, { 32, 32 });
     data[static_cast<int>(AircraftType::kEaglePlayer2)].m_gun_offset = sf::Vector2f(0.f, -8.f);
 
     data[static_cast<int>(AircraftType::kRaptor)].m_hitpoints = 20;
@@ -68,13 +68,13 @@ std::vector<ProjectileData> InitializeProjectileData()
     std::vector<ProjectileData> data(static_cast<int>(ProjectileType::kProjectileCount));
     data[static_cast<int>(ProjectileType::kAlliedBullet)].m_damage = 10;
     data[static_cast<int>(ProjectileType::kAlliedBullet)].m_speed = 1500;
-    data[static_cast<int>(ProjectileType::kAlliedBullet)].m_texture = TextureID::kEntities;
-    data[static_cast<int>(ProjectileType::kAlliedBullet)].m_texture_rect = sf::IntRect({ 640, 0 }, { 64, 64 });
+    data[static_cast<int>(ProjectileType::kAlliedBullet)].m_texture = TextureID::kBullet;
+    data[static_cast<int>(ProjectileType::kAlliedBullet)].m_texture_rect = sf::IntRect({ 0, 0 }, { 32, 32 });
 
     data[static_cast<int>(ProjectileType::kEnemyBullet)].m_damage = 10;
     data[static_cast<int>(ProjectileType::kEnemyBullet)].m_speed = 300;
-    data[static_cast<int>(ProjectileType::kEnemyBullet)].m_texture = TextureID::kEntities;
-    data[static_cast<int>(ProjectileType::kEnemyBullet)].m_texture_rect = sf::IntRect({ 175, 64 }, { 3, 14 });
+    data[static_cast<int>(ProjectileType::kEnemyBullet)].m_texture = TextureID::kBullet;
+    data[static_cast<int>(ProjectileType::kEnemyBullet)].m_texture_rect = sf::IntRect({ 0, 0 }, { 32, 32 });
 
 
     data[static_cast<int>(ProjectileType::kMissile)].m_damage = 200;

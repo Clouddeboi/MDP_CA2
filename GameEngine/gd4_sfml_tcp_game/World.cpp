@@ -908,7 +908,7 @@ void World::LoadTextures()
 	m_textures.Load(TextureID::kRaptor, "Media/Textures/Raptor.png");
 	m_textures.Load(TextureID::kAvenger, "Media/Textures/Avenger.png");
 	m_textures.Load(TextureID::kLandscape, "Media/Textures/Desert.png");
-	m_textures.Load(TextureID::kBullet, "Media/Textures/Bullet.png");
+	m_textures.Load(TextureID::kBullet, "Media/Textures/CircleBullet.png");
 	m_textures.Load(TextureID::kMissile, "Media/Textures/Missile.png");
 
 	m_textures.Load(TextureID::kHealthRefill, "Media/Textures/HealthRefill.png");
@@ -932,6 +932,8 @@ void World::LoadTextures()
 
 	m_textures.Load(TextureID::kPlayerIdleAnimation, "Media/Textures/Player/Player_Idle_Spaceman.png");
 	m_textures.Load(TextureID::kPlayerRunAnimation, "Media/Textures/Player/Player_Run_Spaceman.png");
+
+	m_textures.Load(TextureID::kGun, "Media/Textures/Gun.png");
 
 	m_textures.Load(TextureID::kPlayerGrayscale, "Media/Textures/Player/Wizard_M_Jump.png");
 
