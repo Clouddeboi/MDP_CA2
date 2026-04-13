@@ -51,7 +51,6 @@ public:
 		std::uint8_t hp;
 		std::uint8_t ammo;
 		std::uint8_t anim = 0;
-		std::int16_t  gun_angle = 0;
 	};
 
 	void CopyAircraftStates(std::vector<NetAircraftState>& outStates) const;
@@ -66,7 +65,7 @@ public:
 		uint8_t r = 255, g = 255, b = 255;
 	};
 
-	void UpdateHostAircraftState(const sf::Vector2f& pos, const sf::Vector2f& vel, uint8_t hp, uint8_t ammo, uint8_t anim = 0, int16_t gun_angle = 0);
+	void UpdateHostAircraftState(const sf::Vector2f& pos, const sf::Vector2f& vel, uint8_t hp, uint8_t ammo, uint8_t anim = 0);
 	bool PollHostEvent(HostEvent& outEvent);
 	void PushHostEvent(const HostEvent& event);
 
@@ -98,7 +97,6 @@ private:
 
 		uint8_t m_anim = 0;
 		sf::Vector2f m_velocity = { 0.f, 0.f };
-		std::int16_t m_gun_angle = 0;
 	};
 
 	typedef std::unique_ptr<RemotePeer> PeerPtr;

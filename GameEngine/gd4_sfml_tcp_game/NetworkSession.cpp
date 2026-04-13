@@ -491,8 +491,7 @@ bool NetworkSession::PollGameplayPacket(sf::Packet& outPacket)
 			outPacket << s.id
 			<< s.position.x << s.position.y
 			<< s.velocity.x << s.velocity.y
-			<< s.hp << s.ammo << s.anim
-			<< s.gun_angle;
+			<< s.hp << s.ammo << s.anim;
 
 		return true;
 	}

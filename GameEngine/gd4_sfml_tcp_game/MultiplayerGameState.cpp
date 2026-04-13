@@ -127,7 +127,6 @@ bool MultiplayerGameState::Update(sf::Time dt)
 				interp.hp = s.hp;
 				interp.ammo = s.ammo;
 				interp.anim = s.anim;
-				interp.gun_angle = s.gun_angle;
 				interp.initialized = true;
 			}
 			else
@@ -138,7 +137,6 @@ bool MultiplayerGameState::Update(sf::Time dt)
 				interp.hp = s.hp;
 				interp.ammo = s.ammo;
 				interp.anim = s.anim;
-				interp.gun_angle = s.gun_angle;
 			}
 		}
 
@@ -190,20 +188,17 @@ bool MultiplayerGameState::Update(sf::Time dt)
 		if (GetContext().network->IsHosting())
 		{
 			Aircraft* a = m_world.GetPlayerAircraft(0);
-			const float gunDeg = a ? a->GetGunWorldRotation() : 0.f;
-			const int16_t gun_angle = static_cast<int16_t>(gunDeg * 10.f);
-
 			if (a)
 			{
 				const sf::Vector2f pos = a->getPosition();
-				const sf::Vector2f vel = a->GetVelocity();
+				const sf::Vector2f vel = a->GetVelocity();   // <-- send real velocity
 				const uint8_t hp = static_cast<uint8_t>(std::max(0, std::min(255, a->GetHitPoints())));
 				const uint8_t ammo = 0;
 				const uint8_t anim = m_world.GetLocalPlayerAnimState(0);
 
 				auto* server = GetContext().network->GetServer();
 				if (server)
-					server->UpdateHostAircraftState(pos, vel, hp, ammo, anim, gun_angle);
+					server->UpdateHostAircraftState(pos, vel, hp, ammo, anim);
 			}
 		}
 		// CLIENT path: send via TCP (existing logic)
@@ -267,8 +262,6 @@ bool MultiplayerGameState::Update(sf::Time dt)
 
 				const sf::Vector2f pos = a->getPosition();
 				const sf::Vector2f vel = a->GetVelocity();
-				const float gunDeg = a->GetGunWorldRotation();
-				const int16_t gun_angle = static_cast<int16_t>(gunDeg * 10.f);
 				const std::uint8_t hp = static_cast<std::uint8_t>(std::max(0, std::min(255, a->GetHitPoints())));
 				const std::uint8_t ammo = 0;
 
@@ -276,7 +269,7 @@ bool MultiplayerGameState::Update(sf::Time dt)
 				p << aircraft_identifier
 					<< pos.x << pos.y
 					<< vel.x << vel.y
-					<< hp << ammo << anim << gun_angle;
+					<< hp << ammo << anim;
 
 				auto& last = m_last_sent_local_states[aircraft_identifier];
 				last.position = pos;
@@ -322,7 +315,6 @@ bool MultiplayerGameState::Update(sf::Time dt)
 		st.current += (deadReckoned - st.current) * blend;
 
 		m_world.UpdateNetworkActorState(id, st.current, st.hp, st.ammo, st.anim);
-		m_world.SetNetworkActorGunAngle(id, st.gun_angle);
 	}
 	m_perf.interp_time_total += interp_timer.getElapsedTime();
 
@@ -548,7 +540,7 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 		for (std::uint8_t i = 0; i < count; ++i)
 		{
 			NetActorState s;
-			if (!(packet >> s.id >> s.x >> s.y >> s.vx >> s.vy >> s.hp >> s.ammo >> s.anim >> s.gun_angle))
+			if (!(packet >> s.id >> s.x >> s.y >> s.vx >> s.vy >> s.hp >> s.ammo >> s.anim))
 				return;
 			m_latest_snapshot.push_back(s);
 

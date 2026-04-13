@@ -349,18 +349,16 @@ void GameServer::HandleIncomingPackets(sf::Packet& packet, RemotePeer& receiving
             uint8_t aircraft_hitpoints;
             uint8_t missile_ammo;
             uint8_t anim;
-            std::int16_t gun_angle = 0;
             packet >> aircraft_identifier
                 >> aircraft_position.x >> aircraft_position.y
                 >> aircraft_velocity.x >> aircraft_velocity.y
-                >> aircraft_hitpoints >> missile_ammo >> anim >> gun_angle;
+                >> aircraft_hitpoints >> missile_ammo >> anim;
 
             m_aircraft_info[aircraft_identifier].m_position = aircraft_position;
             m_aircraft_info[aircraft_identifier].m_velocity = aircraft_velocity;
             m_aircraft_info[aircraft_identifier].m_hitpoints = aircraft_hitpoints;
             m_aircraft_info[aircraft_identifier].m_missile_ammo = missile_ammo;
             m_aircraft_info[aircraft_identifier].m_anim = anim;
-            m_aircraft_info[aircraft_identifier].m_gun_angle = gun_angle;
         }
     }
     break;
@@ -865,20 +863,18 @@ void GameServer::CopyAircraftStates(std::vector<NetAircraftState>& outStates) co
         s.hp = kv.second.m_hitpoints;
         s.ammo = kv.second.m_missile_ammo;
         s.anim = kv.second.m_anim;
-        s.gun_angle = kv.second.m_gun_angle;
         outStates.push_back(s);
     }
 }
 
-void GameServer::UpdateHostAircraftState(const sf::Vector2f& pos, const sf::Vector2f& vel, uint8_t hp, uint8_t ammo, uint8_t anim, int16_t gun_angle)
+void GameServer::UpdateHostAircraftState(const sf::Vector2f& pos, const sf::Vector2f& vel, uint8_t hp, uint8_t ammo, uint8_t anim)
 {
     std::scoped_lock lock(m_aircraft_mutex);
-    m_aircraft_info[0].m_position     = pos;
-    m_aircraft_info[0].m_velocity     = vel;
-    m_aircraft_info[0].m_hitpoints    = hp;
+    m_aircraft_info[0].m_position = pos;
+    m_aircraft_info[0].m_velocity = vel;
+    m_aircraft_info[0].m_hitpoints = hp;
     m_aircraft_info[0].m_missile_ammo = ammo;
-    m_aircraft_info[0].m_anim         = anim;
-    m_aircraft_info[0].m_gun_angle    = gun_angle;
+    m_aircraft_info[0].m_anim = anim;
 }
 
 void GameServer::PushHostEvent(const HostEvent& event)

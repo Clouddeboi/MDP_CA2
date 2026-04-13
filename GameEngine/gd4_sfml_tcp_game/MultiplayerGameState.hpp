@@ -35,7 +35,6 @@ private:
 		std::uint8_t ammo = 0;
 		// Animation: bit 0 = facing right, bit 1 = is running
 		std::uint8_t anim = 0;
-		std::int16_t  gun_angle = 0;
 	};
 
 	struct RemoteInterpState
@@ -48,7 +47,6 @@ private:
 		std::uint8_t ammo = 0;
 		std::uint8_t anim = 0;
 		bool initialized = false;
-		std::int16_t gun_angle = 0;
 	};
 
 	struct LastSentLocalState

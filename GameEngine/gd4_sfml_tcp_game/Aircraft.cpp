@@ -927,13 +927,3 @@ bool Aircraft::IsFacingRight() const
 {
 	return m_facing_right;
 }
-
-void Aircraft::SetGunWorldRotation(float angleDeg)
-{
-	m_gun_world_rotation = angleDeg;
-}
-
-float Aircraft::GetGunWorldRotation() const
-{
-	return m_gun_world_rotation;
-}
