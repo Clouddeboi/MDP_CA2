@@ -77,7 +77,20 @@ MultiplayerGameState::MultiplayerGameState(StateStack& stack, Context context)
 
 	// Client receives scores from host — it must not compute them independently
 	if (!isHost)
+	{
 		m_world.SetScoreAuthoritative(false);
+		m_world.SetNetworkRoundAuthority(false);  // client waits for kNewRound packets
+	}
+
+	if (isHost)
+	{
+		if (auto* srv = GetContext().network->GetServer())
+		{
+			srv->BroadcastNewRound(m_world.GetCurrentLevelIndex());
+			std::cout << "[MP] BroadcastNewRound (initial) level="
+				<< (int)m_world.GetCurrentLevelIndex() << "\n";
+		}
+	}
 }
 
 void MultiplayerGameState::Draw()

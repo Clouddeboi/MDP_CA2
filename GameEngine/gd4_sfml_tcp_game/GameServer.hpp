@@ -58,12 +58,13 @@ public:
 
 	struct HostEvent
 	{
-		enum Type { kConnect, kDisconnect, kColorSync, kSpawnProjectile };
+		enum Type { kConnect, kDisconnect, kColorSync, kSpawnProjectile, kNewRound};
 		Type type;
 		uint8_t aircraft_id;
 		float x = 0.f, y = 0.f;
 		float vx = 0.f, vy = 0.f;
 		uint8_t r = 255, g = 255, b = 255;
+		uint8_t level_index = 0;
 	};
 
 	void UpdateHostAircraftState(const sf::Vector2f& pos, const sf::Vector2f& vel, uint8_t hp, uint8_t ammo, uint8_t anim = 0);

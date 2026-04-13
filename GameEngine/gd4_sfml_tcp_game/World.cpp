@@ -2334,14 +2334,23 @@ void World::PreloadLevels()
 	m_level_manager.RefreshLevelList();
 	const auto& paths = m_level_manager.GetAvailableLevels();
 
+	// Collect valid levels paired with their paths
+	std::vector<std::pair<std::string, LevelData>> loaded;
 	for (const auto& path : paths)
 	{
 		LevelData data;
 		if (LevelSerializer::Load(path, data) && data.IsValid())
-		{
-			m_preloaded_levels.push_back(data);
-			m_preloaded_level_paths.push_back(path);
-		}
+			loaded.emplace_back(path, std::move(data));
+	}
+
+	// Sort by path so both machines always assign the same index to the same level
+	std::sort(loaded.begin(), loaded.end(),
+		[](const auto& a, const auto& b) { return a.first < b.first; });
+
+	for (auto& [path, data] : loaded)
+	{
+		m_preloaded_level_paths.push_back(path);
+		m_preloaded_levels.push_back(std::move(data));
 	}
 
 	std::cout << "Preloaded valid levels: " << m_preloaded_levels.size() << std::endl;
