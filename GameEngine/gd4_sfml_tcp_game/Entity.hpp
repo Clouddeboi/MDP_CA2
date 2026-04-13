@@ -41,6 +41,8 @@ public:
 
 	virtual void UpdateCurrent(sf::Time dt, CommandQueue& commands);
 
+	bool m_use_physics = false;
+
 protected:
 	//Helper for integrating physics
 	virtual void ApplyPhysics(sf::Time dt);
@@ -49,7 +51,6 @@ private:
 	sf::Vector2f m_velocity;
 	int m_hitpoints;
 
-	bool m_use_physics = false;
 	float m_mass = 1.f;
 	sf::Vector2f m_accumulated_forces{0.f, 0.f};
 	float m_linear_drag{ 0.0f };

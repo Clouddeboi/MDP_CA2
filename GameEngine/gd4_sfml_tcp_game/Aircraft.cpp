@@ -180,23 +180,27 @@ Aircraft::Aircraft(AircraftType type, const TextureHolder& textures, const FontH
 	UpdateTexts();
 }
 
-unsigned int Aircraft::GetCategory() const
-{
-	if (IsAllied())
+	unsigned int Aircraft::GetCategory() const
 	{
-		//Return player category if player_id is valid
-		if (m_player_id >= 0 && m_player_id < 20)
+		if (IsAllied())
 		{
-			return static_cast<unsigned int>(GetPlayerCategory(m_player_id));
+			// Floating remote display actors must never receive local player commands
+			if (!m_use_physics)
+			{
+				return static_cast<unsigned int>(ReceiverCategories::kRemotePlayer);
+			}
+
+			if (m_player_id >= 0 && m_player_id < 20)
+			{
+				return static_cast<unsigned int>(GetPlayerCategory(m_player_id));
+			}
+			else
+			{
+				return static_cast<unsigned int>(ReceiverCategories::kPlayerAircraft);
+			}
 		}
-		else
-		{
-			//Fallback to generic player aircraft for invalid IDs
-			return static_cast<unsigned int>(ReceiverCategories::kPlayerAircraft);
-		}
+		return static_cast<unsigned int>(ReceiverCategories::kEnemyAircraft);
 	}
-	return static_cast<unsigned int>(ReceiverCategories::kEnemyAircraft);
-}
 
 void Aircraft::SetPlayerId(int player_id)
 {
@@ -476,7 +480,7 @@ bool Aircraft::IsMarkedForRemoval() const
 		return false;
 	}
 
-	//return IsDestroyed() && (m_explosion.IsFinished() || !m_show_explosion);
+	return IsDestroyed();
 }
 
 void Aircraft::DrawCurrent(sf::RenderTarget& target, sf::RenderStates states) const
