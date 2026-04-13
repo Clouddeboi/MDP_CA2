@@ -2084,9 +2084,8 @@ void World::SpawnNetworkActor(std::uint8_t networkId, const sf::Vector2f& positi
 
 	if (slotOccupiedByLocal)
 	{
-		// Still track in m_network_actors so snapshot interpolation works.
-		// Create a free-floating actor that is NOT registered in m_player_aircrafts.
-		std::unique_ptr<Aircraft> actor(new Aircraft(AircraftType::kEagle, m_textures, m_fonts));
+		// Pass playerSlot so m_use_animations=true and animations initialize correctly
+		std::unique_ptr<Aircraft> actor(new Aircraft(AircraftType::kEagle, m_textures, m_fonts, playerSlot));
 		Aircraft* actorPtr = actor.get();
 
 		actorPtr->SetPlayerColor(tint);
@@ -2096,7 +2095,6 @@ void World::SpawnNetworkActor(std::uint8_t networkId, const sf::Vector2f& positi
 
 		m_scene_layers[static_cast<int>(SceneLayers::kUpperAir)]->AttachChild(std::move(actor));
 		m_network_actors[networkId] = actorPtr;
-		// Do NOT write m_player_aircrafts[playerSlot] — the local aircraft stays there.
 
 		std::cout << "[MP] SpawnNetworkActor id=" << static_cast<int>(networkId)
 			<< " slot=" << playerSlot << " (slot occupied by local -- floating actor only)\n";
