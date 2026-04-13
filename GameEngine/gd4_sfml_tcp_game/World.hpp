@@ -74,6 +74,8 @@ public:
 	bool PollScoresChanged(std::vector<int>& outScores);     // Host: returns true+scores when they changed
 	void SetScoreAuthoritative(bool isAuthoritative);        // Client calls with false — no local scoring
 
+	void SetNetworkActorGunAngle(std::uint8_t networkId, std::int16_t gun_angle);
+
 private:
 	void LoadTextures();
 	void BuildScene();

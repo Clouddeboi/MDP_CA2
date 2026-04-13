@@ -55,6 +55,9 @@ public:
 	void SetGunOffset(const sf::Vector2f & offset);
 	sf::Vector2f GetGunOffset() const;
 
+	void SetGunWorldRotation(float angleDeg);
+	float GetGunWorldRotation() const;
+
 	void SetPlayerColor(const sf::Color& color);
 	sf::Color GetPlayerColor() const;
 

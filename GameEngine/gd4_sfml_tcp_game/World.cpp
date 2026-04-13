@@ -2507,3 +2507,13 @@ bool World::PollFiredProjectile(std::uint8_t& ownerId, sf::Vector2f& pos, sf::Ve
 	m_pending_fired_projectiles.pop_front();
 	return true;
 }
+
+void World::SetNetworkActorGunAngle(std::uint8_t networkId, std::int16_t gun_angle)
+{
+	auto it = m_network_actors.find(networkId);
+	if (it == m_network_actors.end() || !it->second)
+		return;
+
+	const float angleDeg = static_cast<float>(gun_angle) / 10.f;
+	it->second->SetGunWorldRotation(angleDeg);
+}
