@@ -42,6 +42,7 @@ public:
 	void BroadcastAllColors();
 
 	void BroadcastProjectileSpawn(uint8_t ownerId, float x, float y, float vx, float vy);
+	void BroadcastNewRound(uint8_t levelIndex);
 
 	struct NetAircraftState
 	{

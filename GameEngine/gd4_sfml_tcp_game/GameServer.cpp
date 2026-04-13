@@ -943,3 +943,11 @@ void GameServer::BroadcastScores(const std::vector<int>& scores)
         packet << static_cast<int32_t>(s);
     SendToAll(packet);
 }
+
+void GameServer::BroadcastNewRound(uint8_t levelIndex)
+{
+    sf::Packet packet;
+    packet << static_cast<uint8_t>(Server::PacketType::kNewRound);
+    packet << levelIndex;
+    SendToAll(packet);
+}

@@ -74,6 +74,11 @@ public:
 	bool PollScoresChanged(std::vector<int>& outScores);     // Host: returns true+scores when they changed
 	void SetScoreAuthoritative(bool isAuthoritative);        // Client calls with false — no local scoring
 
+	void  SetNetworkRoundAuthority(bool isAuthority);  // true = host/solo, false = client
+	bool  PollNewRoundBroadcast(uint8_t& outLevelIndex); // host polls this after StartNewRound
+	void  StartNewRoundWithLevel(uint8_t levelIndex);    // client calls on kNewRound receipt
+	uint8_t GetCurrentLevelIndex() const;
+
 private:
 	void LoadTextures();
 	void BuildScene();
@@ -103,6 +108,7 @@ private:
 
 	void CheckRoundEnd();
 	void StartNewRound();
+
 	void RespawnPlayers();
 	int CountAlivePlayers() const;
 	void UpdateScoreDisplay();
@@ -238,5 +244,9 @@ private:
 	bool m_scores_dirty = false;
 	bool m_is_network_mode = false;
 	bool m_score_authoritative = true;
+
+	bool    m_network_round_authority = true;
+	bool    m_new_round_broadcast_ready = false;
+	uint8_t m_new_round_level_index = 0;
 };
 

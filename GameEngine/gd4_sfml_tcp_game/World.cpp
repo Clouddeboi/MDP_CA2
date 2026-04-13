@@ -134,7 +134,15 @@ void World::Update(sf::Time dt)
 
 		if (m_round_restart_timer >= m_round_restart_delay)
 		{
-			StartNewRound();
+			if (m_network_round_authority)   // host or solo: self-start
+			{
+				StartNewRound();             // existing — picks level, increments round
+
+				// Signal to MultiplayerGameState to broadcast the chosen level
+				m_new_round_level_index = static_cast<uint8_t>(m_current_level_index);
+				m_new_round_broadcast_ready = true;
+			}
+			// else: client waits — StartNewRoundWithLevel called via kNewRound packet
 		}
 		return;
 	}
@@ -522,6 +530,60 @@ void World::StartNewRound()
 		{
 			e.Destroy();
 		});
+	m_command_queue.Push(clearPickups);
+	m_pickup_spawn_timer = sf::Time::Zero;
+
+	m_scenegraph.RemoveWrecks();
+}
+
+void World::SetNetworkRoundAuthority(bool isAuthority)
+{
+	m_network_round_authority = isAuthority;
+}
+
+uint8_t World::GetCurrentLevelIndex() const
+{
+	return static_cast<uint8_t>(m_current_level_index);
+}
+
+bool World::PollNewRoundBroadcast(uint8_t& outLevelIndex)
+{
+	if (!m_new_round_broadcast_ready)
+		return false;
+	outLevelIndex = m_new_round_level_index;
+	m_new_round_broadcast_ready = false;
+	return true;
+}
+
+void World::StartNewRoundWithLevel(uint8_t levelIndex)
+{
+	if (IsGameOver()) return;
+
+	m_current_round++;
+	m_round_over = false;
+	m_round_restart_timer = sf::Time::Zero;
+	m_camera_state_saved = false;
+
+	if (!m_preloaded_levels.empty() && levelIndex < static_cast<uint8_t>(m_preloaded_levels.size()))
+	{
+		m_current_level_index = static_cast<std::size_t>(levelIndex);
+		ApplyPreloadedLevel(m_current_level_index);
+		ClearStaticLevelGeometry();
+		BuildSceneFromLevel();
+		LoadSpawnPositionsFromLevel();
+	}
+
+	RespawnPlayers();
+	UpdateScoreDisplay();
+
+	Command clearProjectiles;
+	clearProjectiles.category = static_cast<int>(ReceiverCategories::kProjectile);
+	clearProjectiles.action = DerivedAction<Entity>([](Entity& e, sf::Time) { e.Destroy(); });
+	m_command_queue.Push(clearProjectiles);
+
+	Command clearPickups;
+	clearPickups.category = static_cast<int>(ReceiverCategories::kPickup);
+	clearPickups.action = DerivedAction<Entity>([](Entity& e, sf::Time) { e.Destroy(); });
 	m_command_queue.Push(clearPickups);
 	m_pickup_spawn_timer = sf::Time::Zero;
 

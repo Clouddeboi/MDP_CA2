@@ -383,11 +383,13 @@ bool MultiplayerGameState::Update(sf::Time dt)
 	// Host: broadcast updated scores to client whenever they change
 	if (GetContext().network && GetContext().network->IsHosting())
 	{
-		std::vector<int> updated_scores;
-		if (m_world.PollScoresChanged(updated_scores))
+		uint8_t levelIndex = 0;
+		if (m_world.PollNewRoundBroadcast(levelIndex))
 		{
 			if (auto* srv = GetContext().network->GetServer())
-				srv->BroadcastScores(updated_scores);
+				srv->BroadcastNewRound(levelIndex);
+
+			std::cout << "[MP] BroadcastNewRound level=" << (int)levelIndex << "\n";
 		}
 	}
 
@@ -517,6 +519,17 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 				GetContext().network->SendGameplayPacket(p);
 			}
 		}
+	}
+	break;
+
+	case Server::PacketType::kNewRound:
+	{
+		uint8_t levelIndex = 0;
+		if (!(packet >> levelIndex))
+			return;
+
+		std::cout << "[MP] kNewRound received: level=" << (int)levelIndex << "\n";
+		m_world.StartNewRoundWithLevel(levelIndex);
 	}
 	break;
 
