@@ -908,7 +908,7 @@ void World::LoadTextures()
 	m_textures.Load(TextureID::kRaptor, "Media/Textures/Raptor.png");
 	m_textures.Load(TextureID::kAvenger, "Media/Textures/Avenger.png");
 	m_textures.Load(TextureID::kLandscape, "Media/Textures/Desert.png");
-	m_textures.Load(TextureID::kBullet, "Media/Textures/Bullet.png");
+	m_textures.Load(TextureID::kBullet, "Media/Textures/CircleBullet.png");
 	m_textures.Load(TextureID::kMissile, "Media/Textures/Missile.png");
 
 	m_textures.Load(TextureID::kHealthRefill, "Media/Textures/HealthRefill.png");
