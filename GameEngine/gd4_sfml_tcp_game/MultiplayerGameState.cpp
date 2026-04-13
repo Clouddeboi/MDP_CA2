@@ -516,12 +516,14 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 				const std::uint8_t hp = static_cast<std::uint8_t>(
 					std::max(0, std::min(255, a->GetHitPoints())));
 				const std::uint8_t anim = m_world.GetLocalPlayerAnimState(0);
+				const std::int16_t gun_angle = static_cast<std::int16_t>(
+					a->GetGunWorldRotation() * 10.f);
 
 				sf::Packet p;
 				p << static_cast<std::uint8_t>(Client::PacketType::kStateUpdate);
 				p << static_cast<std::uint8_t>(1);
 				p << aircraftId << pos.x << pos.y << vel.x << vel.y
-					<< hp << static_cast<std::uint8_t>(0) << anim;
+					<< hp << static_cast<std::uint8_t>(0) << anim << gun_angle;
 				GetContext().network->SendGameplayPacket(p);
 			}
 		}
