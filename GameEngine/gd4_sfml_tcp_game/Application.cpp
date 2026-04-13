@@ -35,6 +35,8 @@ Application::Application() : m_window(sf::VideoMode({ 1600, 900 }), "States", sf
 	m_textures.Load(TextureID::kEntities, "Media/Textures/Sprite_Sheet/tilemap.png");
 	m_textures.Load(TextureID::kBox, "Media/Textures/Sprite_Sheet/tilemap.png");
 
+	m_textures.Load(TextureID::kGun, "Media/Textures/spritesheet_default.png");
+
 	RegisterStates();
 	m_stack.PushState(StateID::kTitle);
 }

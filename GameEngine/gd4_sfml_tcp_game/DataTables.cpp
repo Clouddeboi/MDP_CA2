@@ -17,7 +17,7 @@ std::vector<AircraftData> InitializeAircraftData()
     data[static_cast<int>(AircraftType::kEagle)].m_texture_rect = sf::IntRect({ 576, 320 }, { 16, 21 });
     data[static_cast<int>(AircraftType::kEagle)].m_has_roll_animation = true;
     data[static_cast<int>(AircraftType::kEagle)].m_has_gun = true;
-    data[static_cast<int>(AircraftType::kEagle)].m_gun_texture = TextureID::kEntities;
+    data[static_cast<int>(AircraftType::kEagle)].m_gun_texture = TextureID::kGun;
     data[static_cast<int>(AircraftType::kEagle)].m_gun_texture_rect = sf::IntRect({ 512, 192 }, { 64, 64 });
     data[static_cast<int>(AircraftType::kEagle)].m_gun_offset = sf::Vector2f(0.f, -8.f);
 

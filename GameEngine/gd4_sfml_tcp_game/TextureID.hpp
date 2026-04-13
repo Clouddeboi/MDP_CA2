@@ -29,5 +29,6 @@ enum class TextureID
 	kPlayer2Animations,
 	kPlayerIdleAnimation,
 	kPlayerRunAnimation,
-	kPlayerGrayscale
+	kPlayerGrayscale,
+	kGun
 };
