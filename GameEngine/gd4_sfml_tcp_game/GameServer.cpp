@@ -7,7 +7,6 @@
 #include "PickupType.hpp"
 #include <iostream>
 
-// --- In the constructor, after the existing init, register host aircraft (ID 0) ---
 GameServer::GameServer(sf::Vector2f battlefield_size)
     : m_thread()
     , m_listening_state(false)
@@ -27,8 +26,8 @@ GameServer::GameServer(sf::Vector2f battlefield_size)
     m_listener_socket.setBlocking(false);
     m_peers[0].reset(new RemotePeer);
 
-    // Register the host's own aircraft as ID 0
-    // m_aircraft_identifier_counter starts at 1, so client IDs won't conflict
+    //Register the host's own aircraft as ID 0
+    //m_aircraft_identifier_counter starts at 1, so client IDs won't conflict
     m_aircraft_info[0].m_position = sf::Vector2f(
         m_battlefield_rect.size.x / 2.f,
         m_battlefield_rect.position.y + m_battlefield_rect.size.y / 2.f
@@ -317,7 +316,6 @@ void GameServer::HandleIncomingPackets(sf::Packet& packet, RemotePeer& receiving
         receiving_peer.m_socket.send(request_packet);
         m_aircraft_count++;
 
-        // Tell everyone else about the new plane
         sf::Packet notify_packet;
         notify_packet << static_cast<uint8_t>(Server::PacketType::kPlayerConnect);
         notify_packet << m_aircraft_identifier_counter;
@@ -423,13 +421,11 @@ void GameServer::HandleIncomingPackets(sf::Packet& packet, RemotePeer& receiving
             m_aircraft_info[id].m_color_b = b;
         }
 
-        // Broadcast the new color to all peers (including host via HostEvent)
         sf::Packet out;
         out << static_cast<uint8_t>(Server::PacketType::kPlayerColorSync)
             << id << r << g << b;
         SendToAll(out);
 
-        // Notify host game-side via HostEvent
         HostEvent ev;
         ev.type = HostEvent::kColorSync;
         ev.aircraft_id = id;
@@ -460,7 +456,6 @@ void GameServer::HandleIncomingPackets(sf::Packet& packet, RemotePeer& receiving
         float x, y, vx, vy;
         packet >> ownerId >> x >> y >> vx >> vy;
 
-        // Broadcast to all including back to host game-side
         BroadcastProjectileSpawn(ownerId, x, y, vx, vy);
     }
     break;
@@ -506,7 +501,7 @@ void GameServer::HandleIncomingConnections()
         m_peers[m_connected_players]->m_ready = true;
         m_peers[m_connected_players]->m_last_packet_time = Now();
 
-        // Send assigned index
+        //Send assigned index
         sf::Packet assignedPacket;
         assignedPacket << static_cast<std::uint8_t>(Server::PacketType::kLobbyAssignedIndex);
         assignedPacket << static_cast<std::uint8_t>(assignedLobbyIndex);
@@ -539,8 +534,6 @@ void GameServer::HandleIncomingConnections()
         }
         BroadcastLobbySnapshot();
 
-        // Send all existing aircraft colors directly to the new peer
-        // (SendToAll won't reach it yet since m_connected_players not incremented)
         {
             std::scoped_lock lock(m_aircraft_mutex);
             for (const auto& kv : m_aircraft_info)
@@ -919,13 +912,13 @@ void GameServer::BroadcastAllColors()
 
 void GameServer::BroadcastProjectileSpawn(uint8_t ownerId, float x, float y, float vx, float vy)
 {
-    // Broadcast to all connected clients
+    //Broadcast to all connected clients
     sf::Packet p;
     p << static_cast<uint8_t>(Server::PacketType::kSpawnProjectile)
         << ownerId << x << y << vx << vy;
     SendToAll(p);
 
-    // Also push to host game-side via HostEvent
+    //Also push to host game-side via HostEvent
     HostEvent ev;
     ev.type = HostEvent::kSpawnProjectile;
     ev.aircraft_id = ownerId;

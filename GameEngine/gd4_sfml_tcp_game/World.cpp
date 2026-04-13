@@ -134,15 +134,15 @@ void World::Update(sf::Time dt)
 
 		if (m_round_restart_timer >= m_round_restart_delay)
 		{
-			if (m_network_round_authority)   // host or solo: self-start
+			if (m_network_round_authority)//Host or solo: self-start
 			{
-				StartNewRound();             // existing — picks level, increments round
+				StartNewRound();
 
-				// Signal to MultiplayerGameState to broadcast the chosen level
+				//Signal to MultiplayerGameState to broadcast the chosen level
 				m_new_round_level_index = static_cast<uint8_t>(m_current_level_index);
 				m_new_round_broadcast_ready = true;
 			}
-			// else: client waits — StartNewRoundWithLevel called via kNewRound packet
+			//else: client waits — StartNewRoundWithLevel called via kNewRound packet
 		}
 		return;
 	}
@@ -235,8 +235,8 @@ void World::Update(sf::Time dt)
 		scanProjectiles.action = DerivedAction<Projectile>(
 			[localNetId, queue](Projectile& p, sf::Time)
 			{
-				if (!p.IsUsingPhysics()) return;      // skip ghost bullets
-				if (p.WasBroadcast()) return;         // skip already-reported
+				if (!p.IsUsingPhysics()) return;//skip ghost bullets
+				if (p.WasBroadcast()) return;//skip already-reported
 				p.MarkBroadcast();
 				queue->push_back({
 					static_cast<std::uint8_t>(localNetId),
@@ -254,14 +254,12 @@ void World::Update(sf::Time dt)
 		HandleCollisions();
 	}
 
-	// Nullify network actor map entries for nodes about to be freed by RemoveWrecks
 	for (auto& kv : m_network_actors)
 	{
 		if (kv.second && kv.second->IsMarkedForRemoval())
 			kv.second = nullptr;
 	}
 
-	// Also guard local player aircraft pointers for the same reason
 	for (Aircraft*& player : m_player_aircrafts)
 	{
 		if (player && player->IsMarkedForRemoval())
@@ -284,7 +282,6 @@ void World::UpdateCameraZoom(sf::Time dt)
 {
 	std::vector<sf::Vector2f> alive_positions;
 
-	// Local physics-controlled players
 	for (Aircraft* player : m_player_aircrafts)
 	{
 		if (player && !player->IsDestroyed())
@@ -318,13 +315,13 @@ void World::UpdateCameraZoom(sf::Time dt)
 	}
 	else
 	{
-		// Midpoint of all players
+		//Midpoint of all players
 		sf::Vector2f sum(0.f, 0.f);
 		for (const auto& pos : alive_positions)
 			sum += pos;
 		camera_target = sum / static_cast<float>(alive_positions.size());
 
-		// Bounding box of all players
+		//Bounding box of all players
 		float min_x = alive_positions[0].x, max_x = alive_positions[0].x;
 		float min_y = alive_positions[0].y, max_y = alive_positions[0].y;
 		for (size_t i = 1; i < alive_positions.size(); ++i)
@@ -366,7 +363,7 @@ void World::UpdateCameraZoom(sf::Time dt)
 
 void World::CheckRoundEnd()
 {
-	// In network mode we have 1 local + N remote actors; in local mode we need 2+ local players.
+	//In network mode we have 1 local + N remote actors; in local mode we need 2+ local players.
 	const int total_combatants = static_cast<int>(m_player_aircrafts.size())
 		+ static_cast<int>(m_network_actors.size());
 	if (total_combatants < 2)
@@ -383,7 +380,7 @@ void World::CheckRoundEnd()
 	m_round_over = true;
 	m_round_restart_timer = sf::Time::Zero;
 
-	// Per-player status log
+	//Per-player status log
 	std::cout << "\n=== ROUND " << m_current_round << " OVER ===" << std::endl;
 	for (size_t i = 0; i < m_player_aircrafts.size(); ++i)
 	{
@@ -397,15 +394,15 @@ void World::CheckRoundEnd()
 		}
 	}
 
-	// Only the authoritative side (host / local game) increments scores
+	//Only the authoritative side (host / local game) increments scores
 	if (m_score_authoritative)
 	{
 		if (m_is_network_mode)
 		{
-			// Network mode: use networkId as score slot so display order is consistent
+			//Network mode: use networkId as score slot so display order is consistent
 			int winner_net_id = -1;
 
-			// Check local aircraft
+			//Check local aircraft
 			for (const Aircraft* p : m_player_aircrafts)
 			{
 				if (p && p->IsUsingPhysics() && !p->IsDestroyed())
@@ -415,7 +412,7 @@ void World::CheckRoundEnd()
 				}
 			}
 
-			// Check remote network actors
+			//Check remote network actors
 			for (const auto& kv : m_network_actors)
 			{
 				if (kv.second && !kv.second->IsDestroyed())
@@ -437,7 +434,7 @@ void World::CheckRoundEnd()
 		}
 		else
 		{
-			// Local game: use index in m_player_aircrafts as score slot
+			//Local game: use index in m_player_aircrafts as score slot
 			int last_alive_player = -1;
 			for (size_t i = 0; i < m_player_aircrafts.size(); ++i)
 			{
@@ -598,7 +595,7 @@ void World::RespawnPlayers()
 		if (!player)
 			continue;
 
-		// Network actors are repositioned by snapshot — don't overwrite with spawn position
+		//Network actors are repositioned by snapshot — don't overwrite with spawn position
 		if (!player->IsUsingPhysics())
 			continue;
 
@@ -616,8 +613,6 @@ void World::RespawnPlayers()
 		std::cout << "Player " << (i + 1) << " respawned!" << std::endl;
 	}
 
-	// Pre-restore remote actors too — the snapshot will correct position/HP within
-	// one tick but this prevents a single-frame round-over flicker.
 	for (auto& kv : m_network_actors)
 	{
 		Aircraft* actor = kv.second;
@@ -633,14 +628,14 @@ int World::CountAlivePlayers() const
 {
 	int count = 0;
 
-	// Count physics-owned local players
+	//Count physics-owned local players
 	for (const Aircraft* player : m_player_aircrafts)
 	{
 		if (player && player->IsUsingPhysics() && !player->IsDestroyed())
 			++count;
 	}
 
-	// Count remote network actors (driven by snapshots, not local physics)
+	//Count remote network actors, driven by snapshots
 	for (const auto& kv : m_network_actors)
 	{
 		if (kv.second && !kv.second->IsDestroyed())
@@ -709,31 +704,31 @@ void World::UpdateRoundOverlay()
 	sf::Vector2f view_center(view_size.x / 2.f, view_size.y / 2.f);
 
 	std::string message;
-	int last_round_winner = -1;         // display number (1-based slot), -1 = draw
+	int last_round_winner = -1;
 	int alive_count = CountAlivePlayers();
 
 	if (alive_count == 1)
 	{
-		// Check physics-owned local players first
+		//Check physics-owned local players first
 		for (size_t i = 0; i < m_player_aircrafts.size(); ++i)
 		{
 			Aircraft* a = m_player_aircrafts[i];
 			if (a && a->IsUsingPhysics() && !a->IsDestroyed())
 			{
-				// In network mode, the local player's display slot = m_local_network_id
+				//In network mode, the local player's display slot = m_local_network_id
 				last_round_winner = m_is_network_mode ? m_local_network_id : static_cast<int>(i);
 				break;
 			}
 		}
 
-		// If not found among local physics actors, check remote network actors
+		//If not found among local physics actors, check remote network actors
 		if (last_round_winner < 0)
 		{
 			for (const auto& kv : m_network_actors)
 			{
 				if (kv.second && !kv.second->IsDestroyed())
 				{
-					last_round_winner = static_cast<int>(kv.first); // network ID = display slot
+					last_round_winner = static_cast<int>(kv.first);
 					break;
 				}
 			}
@@ -1199,7 +1194,7 @@ void World::BuildSceneFromLevel()
 	std::cout << "Building scene from level data..." << std::endl;
 	std::cout << "Tiles to place: " << m_current_level_data.GetTileCount() << std::endl;
 
-	// Build merged platforms first
+	//Build merged platforms first
 	BuildMergedPlatformsFromLevel();
 
 	for (const auto& tile : m_current_level_data.m_tiles)
@@ -1266,9 +1261,6 @@ void World::BuildScene()
 	{
 		AircraftType player_type = AircraftType::kEagle;
 
-		// Local aircraft always uses player_id 0 (so Player(0) commands reach it).
-		// Its *spawn position* is determined by the server-assigned network ID so that
-		// host spawns at slot 0 and the first client at slot 1, etc.
 		std::unique_ptr<Aircraft> player(new Aircraft(player_type, m_textures, m_fonts, i));
 		Aircraft* player_aircraft = player.get();
 
@@ -1287,10 +1279,6 @@ void World::BuildScene()
 				player_aircraft->SetPlayerColor(default_colors[i]);
 		}
 
-		// Use m_local_network_id to select the spawn position for this machine's player.
-		// For single-player / host: m_local_network_id = 0 → spawn[0].
-		// For client: m_local_network_id will be set by kSpawnSelf later, but we also
-		// reposition in SetLocalNetworkId(), so this is a safe default.
 		const int spawnSlot = m_local_network_id + i;
 		if (spawnSlot < static_cast<int>(m_player_spawn_positions.size()))
 			player_aircraft->setPosition(m_player_spawn_positions[spawnSlot]);
@@ -1372,7 +1360,7 @@ void World::BuildScene()
 				100 + (i * 50) % 155,
 				100 + (i * 70) % 155
 			);
-			score_display->SetColor(NetworkSlotColor(static_cast<std::uint8_t>(i)));  // ← palette color
+			score_display->SetColor(NetworkSlotColor(static_cast<std::uint8_t>(i)));
 		}
 
 		score_display->SetOutlineColor(sf::Color::Black);
@@ -1380,26 +1368,6 @@ void World::BuildScene()
 		m_score_displays.push_back(score_display.get());
 		m_scene_layers[static_cast<int>(SceneLayers::kUI)]->AttachChild(std::move(score_display));
 	}
-
-	//std::string* p1_score_text = new std::string("0");
-	//std::unique_ptr<TextNode> p1_score_display(new TextNode(m_fonts, *p1_score_text));
-	//p1_score_display->setPosition({ 20.f, 20.f });
-	//p1_score_display->setScale({ score_text_size, score_text_size });
-	//p1_score_display->SetColor(sf::Color::Red);
-	//p1_score_display->SetOutlineColor(sf::Color::Black);
-	//p1_score_display->SetOutlineThickness(3.f);
-	//m_score_displays.push_back(p1_score_display.get());
-	//m_scene_layers[static_cast<int>(SceneLayers::kUI)]->AttachChild(std::move(p1_score_display));
-
-	//std::string* p2_score_text = new std::string("0");
-	//std::unique_ptr<TextNode> p2_score_display(new TextNode(m_fonts, *p2_score_text));
-	//p2_score_display->setPosition({ 20.f, 20.f + score_spacing });
-	//p2_score_display->setScale({ score_text_size, score_text_size });
-	//p2_score_display->SetColor(sf::Color::Yellow);
-	//p2_score_display->SetOutlineColor(sf::Color::Black);
-	//p2_score_display->SetOutlineThickness(3.f);
-	//m_score_displays.push_back(p2_score_display.get());
-	//m_scene_layers[static_cast<int>(SceneLayers::kUI)]->AttachChild(std::move(p2_score_display));
 }
 
 void World::UpdateScoreDisplay()
@@ -1683,7 +1651,7 @@ void World::HandleCollisions()
 			if (catA == 0 || catB == 0)
 				continue;
 
-			// Use existing category filter
+			//Use existing category filter
 			if (!SceneNode::CanPotentiallyCollide(catA, catB))
 				continue;
 
@@ -1694,7 +1662,6 @@ void World::HandleCollisions()
 		}
 	}
 
-	// Track grounded state per player
 	std::map<Aircraft*, bool> player_grounded_state;
 	for (Aircraft* player : m_player_aircrafts)
 	{
@@ -2150,18 +2117,12 @@ void World::SpawnNetworkActor(std::uint8_t networkId, const sf::Vector2f& positi
 
 	int playerSlot = static_cast<int>(networkId);
 
-	// CRITICAL: never overwrite a slot that already holds a locally-controlled
-	// physics aircraft.  On the client, slot 0 is the local player; the host's
-	// remote actor (also networkId 0 from the server's perspective) must NOT
-	// replace it.  The remote actor still lives in m_network_actors for snapshot
-	// interpolation — it just does not get a slot in m_player_aircrafts.
 	bool slotOccupiedByLocal = (playerSlot < static_cast<int>(m_player_aircrafts.size()))
 		&& m_player_aircrafts[playerSlot] != nullptr
 		&& m_player_aircrafts[playerSlot]->IsUsingPhysics();
 
 	if (slotOccupiedByLocal)
 	{
-		// Pass playerSlot so m_use_animations=true and animations initialize correctly
 		std::unique_ptr<Aircraft> actor(new Aircraft(AircraftType::kEagle, m_textures, m_fonts, playerSlot));
 		Aircraft* actorPtr = actor.get();
 
@@ -2178,7 +2139,6 @@ void World::SpawnNetworkActor(std::uint8_t networkId, const sf::Vector2f& positi
 		return;
 	}
 
-	// Normal remote actor path (slot is free — e.g. host spawning client's actor).
 	while (static_cast<int>(m_player_aircrafts.size()) <= playerSlot)
 		m_player_aircrafts.push_back(nullptr);
 
@@ -2236,8 +2196,6 @@ void World::UpdateNetworkActorState(std::uint8_t networkId, const sf::Vector2f& 
 	actor->setPosition(position);
 	actor->SetRemoteAnimState(anim);
 
-	// Sync health from authoritative host snapshot.
-	// Use Repair/Damage delta so audio/visual hit effects still fire.
 	const int currentHp = actor->GetHitPoints();
 	const int targetHp = static_cast<int>(hp);
 
@@ -2255,11 +2213,10 @@ void World::UpdateNetworkActorState(std::uint8_t networkId, const sf::Vector2f& 
 	}
 	else if (targetHp > 0 && actor->IsDestroyed())
 	{
-		// Round reset — server says this actor is alive again
 		actor->Repair(targetHp);
 	}
 
-	(void)ammo; // ammo sync can be added similarly if needed
+	(void)ammo;
 }
 
 void World::RemoveNetworkActor(std::uint8_t networkId)
@@ -2271,12 +2228,9 @@ void World::RemoveNetworkActor(std::uint8_t networkId)
 	Aircraft* actor = it->second;
 	int playerSlot = static_cast<int>(networkId);
 
-	// Null the slot BEFORE destroying so any concurrent iteration sees nullptr
 	if (playerSlot < static_cast<int>(m_player_aircrafts.size()))
 		m_player_aircrafts[playerSlot] = nullptr;
 
-	// Erase from map BEFORE calling Destroy so iterators
-	// in UpdateCameraZoom etc. never see a destroyed-but-mapped pointer
 	m_network_actors.erase(it);
 
 	if (actor)
@@ -2285,13 +2239,11 @@ void World::RemoveNetworkActor(std::uint8_t networkId)
 
 void World::UpdateSounds()
 {
-	// Set listener's position to first player's position (or could be average of all players)
 	if (!m_player_aircrafts.empty() && m_player_aircrafts[0])
 	{
 		m_sounds.SetListenerPosition(m_player_aircrafts[0]->GetWorldPosition());
 	}
 
-	// Remove unused sounds
 	m_sounds.RemoveStoppedSounds();
 }
 
@@ -2304,8 +2256,6 @@ void World::GenerateSpawnPositions()
 	const float edge_padding = 150.f;
 	const float usable_width = arena_width - (2.f * edge_padding);
 
-	// Always pre-generate kMaxPlayers slots so any network ID is always valid.
-	// Positions are spread evenly; for 2-player the natural L/R split is preserved.
 	constexpr int kGenerateSlots = 20;
 	const float spacing = usable_width / static_cast<float>(kGenerateSlots - 1);
 
@@ -2380,8 +2330,6 @@ void World::ClearStaticLevelGeometry()
 		const unsigned int cat = child->GetCategory();
 		const bool isPlatform = (cat & static_cast<unsigned int>(ReceiverCategories::kPlatform)) != 0;
 		const bool isBox = (cat & static_cast<unsigned int>(ReceiverCategories::kBox)) != 0;
-		// SpriteNodes (visual tiles) have kNone and are not Aircraft/Player/etc.
-		// Guard: only remove nodes that have NO meaningful game category
 		const bool isVisualTile = (cat == static_cast<unsigned int>(ReceiverCategories::kNone));
 
 		if (isPlatform || isBox || isVisualTile)
@@ -2553,8 +2501,6 @@ std::uint8_t World::GetLocalPlayerAnimState(int playerSlot) const
 	const Aircraft* a = m_player_aircrafts[playerSlot];
 	if (!a) return 0;
 
-	// Use the aircraft's stored facing direction — NOT velocity.
-	// vel.x is 0 when idle, which would wrongly reset facing to right every frame.
 	const bool facingRight = a->IsFacingRight();
 	const bool isRunning = std::abs(a->GetVelocity().x) > 10.f;
 

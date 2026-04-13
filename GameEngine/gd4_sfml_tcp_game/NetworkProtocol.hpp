@@ -2,6 +2,15 @@
 #include <SFML/System/Vector2.hpp>
 #include <cstdint>
 
+/*
+ * Code implementation assisted by GitHub Copilot
+ * Used for:
+ * - Packet type enum design (Server/Client namespaces)
+ * - kNewRound, kScoreUpdate, kSpawnProjectile packet definitions
+ * - Type width decisions (uint8_t discriminators)
+ * Original implementation, modified/adapted by Michal Becmer (D00256088) for project requirements
+ */
+
 const unsigned short SERVER_PORT = 50000; //Greater than 49151, in dynamic port range
 namespace Server
 {
@@ -18,7 +27,7 @@ namespace Server
 		kSpawnPickup, //Similar to kSpawnEnemy. sf::Int32 for pickup type in PickupType.hpp and two floats for position
 		kSpawnSelf, //This takes an sf::Int32 for the aircraft identifier and two float values for the initial position. 
 		kUpdateClientState, //This takes one float with the current scrolling of the world in the server, and then a sf::Int32 for the number of aircraft. For each aircraft, it packs one sf::Int32 value with the identifier, two floats for position, health, and ammo. Think about enemies. If we don't send anything they will be locally tracked
-		kMissionSuccess, // This has no arguments. It just informs the client that the game is over and the client can show the appropriate state
+		kMissionSuccess, //This has no arguments. It just informs the client that the game is over and the client can show the appropriate state
 		kLobbyBindingState,   //uint8 playerIndex, int32 colorIndex, bool ready
 		kLobbyStartGame, //no payload
 		kLobbyPlayerLeft,

@@ -17,7 +17,7 @@ MultiplayerGameState::MultiplayerGameState(StateStack& stack, Context context)
 		*context.window,
 		*context.fonts,
 		*context.sounds,
-		1  // Only 1 local aircraft per machine; remotes are network actors
+		1  //Only 1 local aircraft per machine; remotes are network actors
 	)
 	, m_players()
 	, m_sounds(*context.sounds)
@@ -26,7 +26,7 @@ MultiplayerGameState::MultiplayerGameState(StateStack& stack, Context context)
 
 	auto& config = PlayerBindingConfig::GetInstance();
 
-	// Every machine controls exactly 1 local player (always local slot 0)
+	//Every machine controls exactly 1 local player (always local slot 0)
 	m_players.emplace_back(0);
 
 	auto device = config.GetPlayerDevice(0);
@@ -37,7 +37,7 @@ MultiplayerGameState::MultiplayerGameState(StateStack& stack, Context context)
 
 	const bool isHost = (GetContext().network && GetContext().network->IsHosting());
 
-	// Host self-assigns aircraft ID 0
+	//Host self-assigns aircraft ID 0
 	if (isHost)
 	{
 		m_local_player_to_aircraft_id[0] = 0;
@@ -50,14 +50,14 @@ MultiplayerGameState::MultiplayerGameState(StateStack& stack, Context context)
 	{
 		m_world.SetLocalNetworkId(0);
 
-		// Host is always network ID 0 — pick its color from the shared palette
+		//Host is always network ID 0 — pick its color from the shared palette
 		const sf::Color hostColor = NetworkSlotColor(0);
 		auto* srv = GetContext().network->GetServer();
 		if (srv)
 		{
 			srv->SetAircraftColor(0, hostColor.r, hostColor.g, hostColor.b);
 
-			// Deliver color to host game-side immediately
+			//Deliver color to host game-side immediately
 			GameServer::HostEvent ev;
 			ev.type = GameServer::HostEvent::kColorSync;
 			ev.aircraft_id = 0;
@@ -67,15 +67,12 @@ MultiplayerGameState::MultiplayerGameState(StateStack& stack, Context context)
 			srv->PushHostEvent(ev);
 		}
 
-		// Apply to local physics actor right away
 		Aircraft* a = m_world.GetPlayerAircraft(0);
 		if (a) a->SetPlayerColor(hostColor);
 	}
 
-	// Ensure both host and client have score displays for all network players
 	m_world.SetTotalNetworkPlayerCount(2);
 
-	// Client receives scores from host — it must not compute them independently
 	if (!isHost)
 		m_world.SetScoreAuthoritative(false);
 }
@@ -102,18 +99,15 @@ bool MultiplayerGameState::Update(sf::Time dt)
 	m_world.Update(dt);
 	m_perf.world_update_time_total += world_timer.getElapsedTime();
 
-	// --- Apply snapshots: only update REMOTE actors, never overwrite local ---
 	if (m_has_new_snapshot)
 	{
 		sf::Clock snapshot_timer;
 
 		for (const auto& s : m_latest_snapshot)
 		{
-			// Skip our own aircraft — local physics is authoritative
 			if (IsKnownLocalNetworkId(s.id))
 				continue;
 
-			// Only update known remote actors
 			if (m_known_remote_network_ids.find(s.id) == m_known_remote_network_ids.end())
 				continue;
 
@@ -175,7 +169,6 @@ bool MultiplayerGameState::Update(sf::Time dt)
 		}
 	}
 
-	// --- State updates: BOTH host and client send position to server ---
 	m_state_send_timer += dt;
 	m_state_force_send_timer += dt;
 
@@ -184,14 +177,14 @@ bool MultiplayerGameState::Update(sf::Time dt)
 		m_state_send_timer = sf::Time::Zero;
 		const bool force_send = m_state_force_send_timer >= m_state_force_send_interval;
 
-		// HOST path: update server directly (no TCP socket)
+
 		if (GetContext().network->IsHosting())
 		{
 			Aircraft* a = m_world.GetPlayerAircraft(0);
 			if (a)
 			{
 				const sf::Vector2f pos = a->getPosition();
-				const sf::Vector2f vel = a->GetVelocity();   // <-- send real velocity
+				const sf::Vector2f vel = a->GetVelocity();
 				const uint8_t hp = static_cast<uint8_t>(std::max(0, std::min(255, a->GetHitPoints())));
 				const uint8_t ammo = 0;
 				const uint8_t anim = m_world.GetLocalPlayerAnimState(0);
@@ -201,7 +194,6 @@ bool MultiplayerGameState::Update(sf::Time dt)
 					server->UpdateHostAircraftState(pos, vel, hp, ammo, anim);
 			}
 		}
-		// CLIENT path: send via TCP (existing logic)
 		else if (GetContext().network->IsClient())
 		{
 			sf::Packet p;
@@ -290,7 +282,6 @@ bool MultiplayerGameState::Update(sf::Time dt)
 			m_state_force_send_timer = sf::Time::Zero;
 	}
 
-	// Smooth remote actor movement
 	sf::Clock interp_timer;
 	for (auto& kv : m_remote_interp)
 	{
@@ -300,17 +291,15 @@ bool MultiplayerGameState::Update(sf::Time dt)
 		if (!st.initialized)
 			continue;
 
-		// Advance the clock since the last received snapshot
+		//Advance the clock since the last received snapshot
 		st.time_since_snap += dt;
 
-		// Predict where the remote player is RIGHT NOW using their last known velocity.
-		// Cap extrapolation at 150ms so a network stall doesn't send the ghost flying.
+		//Predict where the remote player is RIGHT NOW using their last known velocity.
+		//Cap extrapolation at 150ms so a network stall doesn't send the ghost flying.
 		constexpr float kMaxExtrapolation = 0.05f;
 		const float t = std::min(st.time_since_snap.asSeconds(), kMaxExtrapolation);
 		const sf::Vector2f deadReckoned = st.target + st.velocity * t;
 
-		// Smoothly blend the rendered position toward the prediction.
-		// 15x per-second is snappy enough to correct errors without snapping.
 		const float blend = std::min(1.f, dt.asSeconds() * 20.f);
 		st.current += (deadReckoned - st.current) * blend;
 
@@ -354,12 +343,11 @@ bool MultiplayerGameState::Update(sf::Time dt)
 		m_perf = PerfCounters{};
 	}
 
-	// Flush any new projectiles the local player fired this frame to the server
+	//Flush any new projectiles the local player fired this frame to the server
 	if (GetContext().network && GetContext().network->IsActive())
 	{
 		sf::Vector2f projPos, projVel;
 		std::uint8_t ownerId = 0;
-		// GetPendingFiredProjectiles drains a queue filled by World
 		while (m_world.PollFiredProjectile(ownerId, projPos, projVel))
 		{
 			if (GetContext().network->IsClient())
@@ -371,7 +359,6 @@ bool MultiplayerGameState::Update(sf::Time dt)
 			}
 			else if (GetContext().network->IsHosting())
 			{
-				// Host: broadcast directly
 				if (auto* srv = GetContext().network->GetServer())
 					srv->BroadcastProjectileSpawn(ownerId, projPos.x, projPos.y, projVel.x, projVel.y);
 			}
@@ -380,10 +367,8 @@ bool MultiplayerGameState::Update(sf::Time dt)
 		}
 	}
 
-	// Host: broadcast updated scores to client whenever they change
 	if (GetContext().network && GetContext().network->IsHosting())
 	{
-		// Broadcast updated scores whenever they change (kill, round end, etc.)
 		std::vector<int> updatedScores;
 		if (m_world.PollScoresChanged(updatedScores))
 		{
@@ -397,7 +382,6 @@ bool MultiplayerGameState::Update(sf::Time dt)
 			}
 		}
 
-		// Broadcast new round level index after StartNewRound picks a level
 		uint8_t levelIndex = 0;
 		if (m_world.PollNewRoundBroadcast(levelIndex))
 		{
@@ -510,12 +494,10 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 		std::cout << "[MP] kSpawnSelf: local aircraft id=" << static_cast<int>(aircraftId)
 			<< " server pos=(" << x << ", " << y << ")\n";
 
-		// Deterministic color: same palette index → same color on every machine
 		const sf::Color myColor = NetworkSlotColor(aircraftId);
 		Aircraft* a = m_world.GetPlayerAircraft(0);
 		if (a) a->SetPlayerColor(myColor);
 
-		// Immediately push corrected spawn position to server
 		if (GetContext().network && GetContext().network->IsClient())
 		{
 			if (a)
@@ -616,7 +598,6 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 		if (!(packet >> ownerId >> x >> y >> vx >> vy))
 			return;
 
-		// Don't spawn a ghost bullet for our own shots (we already spawned it locally)
 		if (IsKnownLocalNetworkId(ownerId))
 			return;
 
@@ -657,8 +638,6 @@ void MultiplayerGameState::OnRemotePlayerConnected(std::uint8_t networkId, float
 	m_known_remote_network_ids.insert(networkId);
 	++m_perf.remote_connects;
 
-	// Deterministic: networkId 0 always red, 1 always blue, etc.
-	// No packets needed — both machines independently compute the same color.
 	const sf::Color tint = NetworkSlotColor(networkId);
 	m_world.SpawnNetworkActor(networkId, { x, y }, tint);
 

@@ -8,6 +8,18 @@
 #include <unordered_set>
 #include <SFML/Network/Packet.hpp>
 
+/*
+ * Code implementation assisted by GitHub Copilot
+ * Used for:
+ * - Per-frame network polling and packet dispatch (PollNetworkGameplay, HandleServerPacket)
+ * - Dead reckoning and client-side interpolation (RemoteInterpState, blend logic)
+ * - Local state upload at 30Hz with delta filtering (kStateUpdate send path)
+ * - Network actor identity mapping (m_local_player_to_aircraft_id, m_known_remote_network_ids)
+ * - Score broadcast polling and new round broadcast polling
+ * - Projectile fire relay (PollFiredProjectile, BroadcastProjectileSpawn)
+ * Original implementation, modified/adapted by Michal Becmer (D00256088) for project requirements
+ */
+
 class MultiplayerGameState : public State
 {
 public:
@@ -33,7 +45,7 @@ private:
 		float vy = 0.f;
 		std::uint8_t hp = 0;
 		std::uint8_t ammo = 0;
-		// Animation: bit 0 = facing right, bit 1 = is running
+		//Animation: bit 0 = facing right, bit 1 = is running
 		std::uint8_t anim = 0;
 	};
 

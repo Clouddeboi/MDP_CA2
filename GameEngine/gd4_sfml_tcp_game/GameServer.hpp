@@ -16,6 +16,19 @@
 #include <deque>
 #include <tuple>
 
+/*
+ * Code implementation assisted by GitHub Copilot
+ * Used for:
+ * - Dedicated server execution thread architecture (ExecutionThread)
+ * - Client connection handshake sequence (HandleIncomingConnections)
+ * - Incoming packet dispatch and routing (HandleIncomingPackets)
+ * - 30Hz state snapshot broadcasting (UpdateClientState)
+ * - Thread-safe HostEvent queue for main thread communication
+ * - Disconnection detection and peer cleanup (HandleDisconnections)
+ * - BroadcastNewRound, BroadcastScores, BroadcastProjectileSpawn implementations
+ * Original implementation, modified/adapted by Michal Becmer (D00256088) for project requirements
+ */
+
 class GameServer
 {
 public:

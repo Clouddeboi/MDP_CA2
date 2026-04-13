@@ -10,6 +10,17 @@
 #include <cstdint>
 #include <SFML/Network/Packet.hpp>
 
+/*
+ * Code implementation assisted by GitHub Copilot
+ * Used for:
+ * - Host/client mode management (NetworkMode enum)
+ * - Lobby packet classification and buffering (PollLobbyPackets)
+ * - Gameplay packet polling interface (PollGameplayPacket)
+ * - Pending gameplay packet queue to prevent lobby-phase packet loss
+ * - HostEvent synthesis into sf::Packet format for the host game loop
+ * Original implementation, modified/adapted by Michal Becmer (D00256088) for project requirements
+ */
+
 namespace sf
 {
 	class TcpSocket;
