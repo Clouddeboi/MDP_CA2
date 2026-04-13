@@ -33,6 +33,7 @@ enum class ReceiverCategories
 	kPlayer20 = 1 << 29,
 	kPlayerAircraft = kPlayer1 | kPlayer2 | kPlayer3 | kPlayer4 | kPlayer5 | kPlayer6 | kPlayer7 | kPlayer8 | kPlayer9 | kPlayer10 | kPlayer11 | kPlayer12 | kPlayer13 | kPlayer14 | kPlayer15 | kPlayer16 | kPlayer17 | kPlayer18 | kPlayer19 | kPlayer20,
 	kBox = 1 << 30,
+	kRemotePlayer = 1 << 31,
 
 	kAircraft = kPlayerAircraft | kAlliedAircraft | kEnemyAircraft,
 	kProjectile = kAlliedProjectile | kEnemyProjectile

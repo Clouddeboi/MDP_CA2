@@ -17,6 +17,7 @@
 #include "LevelManager.hpp"
 
 #include <array>
+#include <unordered_map>
 
 class World 
 {
@@ -53,6 +54,25 @@ public:
 	void ClearLevel();
 	LevelData& GetCurrentLevelData();
 	const LevelData& GetCurrentLevelData() const;
+
+	void SpawnNetworkActor(std::uint8_t networkId, const sf::Vector2f& position, const sf::Color& tint = sf::Color::Cyan);
+	void UpdateNetworkActorState(std::uint8_t networkId, const sf::Vector2f& position, std::uint8_t hp, std::uint8_t ammo, std::uint8_t anim = 0);
+	std::uint8_t GetLocalPlayerAnimState(int playerSlot) const;
+	void RemoveNetworkActor(std::uint8_t networkId);
+
+	void SetNetworkActorColor(std::uint8_t networkId, const sf::Color& color);
+
+	void SetLocalNetworkId(int networkId);
+	void SetCollisionEnabled(bool enabled);
+
+	void SpawnNetworkProjectile(std::uint8_t ownerId, const sf::Vector2f& pos, const sf::Vector2f& vel);
+	void SetOnProjectileFiredCallback(std::function<void(std::uint8_t, sf::Vector2f, sf::Vector2f)> cb);
+	bool PollFiredProjectile(std::uint8_t& ownerId, sf::Vector2f& pos, sf::Vector2f& vel);
+
+	void SetTotalNetworkPlayerCount(int count);     // Call on both host+client to create all score displays
+	void ApplyNetworkScores(const std::vector<int>& scores); // Client: apply scores received from host
+	bool PollScoresChanged(std::vector<int>& outScores);     // Host: returns true+scores when they changed
+	void SetScoreAuthoritative(bool isAuthoritative);        // Client calls with false — no local scoring
 
 private:
 	void LoadTextures();
@@ -104,6 +124,8 @@ private:
 	void BuildMergedPlatformsFromLevel();
 	void AddPlatformColliderFromTile(const TileData& tile);
 	void AddPlatformVisualTilesFromTile(const TileData& tile);
+
+	void RebuildCollidablesList();
 
 private:
 	struct SpawnPoint
@@ -200,5 +222,21 @@ private:
 	std::vector<LevelData> m_preloaded_levels;
 	std::vector<std::string> m_preloaded_level_paths;
 	std::size_t m_current_level_index = 0;
+
+	std::unordered_map<std::uint8_t, Aircraft*> m_network_actors;
+
+	bool m_collision_enabled = true;
+
+	int m_local_network_id = 0;
+
+	std::vector<SceneNode*> m_collidables;
+
+	std::function<void(std::uint8_t, sf::Vector2f, sf::Vector2f)> m_on_projectile_fired;
+	struct PendingProjectile { std::uint8_t ownerId; sf::Vector2f pos, vel; };
+	std::deque<PendingProjectile> m_pending_fired_projectiles;
+
+	bool m_scores_dirty = false;
+	bool m_is_network_mode = false;
+	bool m_score_authoritative = true;
 };
 

@@ -5,9 +5,12 @@ enum class StateID
 	kTitle,
 	kMenu,
 	kGame,
+	kMultiplayerGame,
 	kPause,
 	kSettings,
 	kGameOver,
 	kBinding,
-	kEditor
+	kEditor,
+	kHostLobby,
+	kJoinByIp
 };

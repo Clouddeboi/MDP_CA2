@@ -7,6 +7,11 @@ MusicPlayer::MusicPlayer()
 	m_filenames[MusicThemes::kMissionTheme] = "Media/Music/MissionTheme.ogg";
 }
 
+MusicPlayer::~MusicPlayer()
+{
+	m_music.stop();
+}
+
 void MusicPlayer::Play(MusicThemes theme)
 {
 	std::string filename = m_filenames[theme];

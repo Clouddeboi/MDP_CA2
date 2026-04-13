@@ -9,6 +9,7 @@
 #include "PlayerBindingConfig.hpp"
 #include "LevelSerializer.hpp"
 #include "TileRegistry.hpp"
+#include "NetworkSlotColor.hpp"
 #include <iostream>
 #include <ctime>  
 #include <algorithm>
@@ -71,7 +72,8 @@ World::World(sf::RenderTarget& output_target, FontHolder& font, SoundPlayer& sou
 
 	if (!m_preloaded_levels.empty())
 	{
-		m_current_level_index = static_cast<std::size_t>(std::rand() % m_preloaded_levels.size());
+		//m_current_level_index = static_cast<std::size_t>(std::rand() % m_preloaded_levels.size());
+		m_current_level_index = 0;
 		ApplyPreloadedLevel(m_current_level_index);
 		LoadSpawnPositionsFromLevel();
 	}
@@ -216,8 +218,48 @@ void World::Update(sf::Time dt)
 
 	m_scenegraph.Update(dt, m_command_queue);
 
+	if (m_local_network_id >= 0)
+	{
+		Command scanProjectiles;
+		scanProjectiles.category = static_cast<int>(ReceiverCategories::kAlliedProjectile);
+		const int localNetId = m_local_network_id;
+		auto* queue = &m_pending_fired_projectiles;
+		scanProjectiles.action = DerivedAction<Projectile>(
+			[localNetId, queue](Projectile& p, sf::Time)
+			{
+				if (!p.IsUsingPhysics()) return;      // skip ghost bullets
+				if (p.WasBroadcast()) return;         // skip already-reported
+				p.MarkBroadcast();
+				queue->push_back({
+					static_cast<std::uint8_t>(localNetId),
+					p.GetWorldPosition(),
+					p.GetVelocity()
+					});
+			});
+		m_scenegraph.OnCommand(scanProjectiles, sf::Time::Zero);
+	}
+
 	AdaptPlayerPosition();
-	HandleCollisions();
+
+	if (m_collision_enabled)
+	{
+		HandleCollisions();
+	}
+
+	// Nullify network actor map entries for nodes about to be freed by RemoveWrecks
+	for (auto& kv : m_network_actors)
+	{
+		if (kv.second && kv.second->IsMarkedForRemoval())
+			kv.second = nullptr;
+	}
+
+	// Also guard local player aircraft pointers for the same reason
+	for (Aircraft*& player : m_player_aircrafts)
+	{
+		if (player && player->IsMarkedForRemoval())
+			player = nullptr;
+	}
+
 	m_scenegraph.RemoveWrecks();
 
 	m_scenegraph.Update(sf::Time::Zero, m_command_queue);
@@ -232,80 +274,75 @@ void World::Update(sf::Time dt)
 
 void World::UpdateCameraZoom(sf::Time dt)
 {
-	std::vector<Aircraft*> alive_players;
+	std::vector<sf::Vector2f> alive_positions;
+
+	// Local physics-controlled players
 	for (Aircraft* player : m_player_aircrafts)
 	{
 		if (player && !player->IsDestroyed())
-		{
-			alive_players.push_back(player);
-		}
+			alive_positions.push_back(player->getPosition());
 	}
 
-	if (alive_players.empty())
+	std::vector<std::uint8_t> remote_ids;
+	remote_ids.reserve(m_network_actors.size());
+	for (const auto& kv : m_network_actors)
+		remote_ids.push_back(kv.first);
+
+	for (std::uint8_t id : remote_ids)
+	{
+		auto it = m_network_actors.find(id);
+		if (it == m_network_actors.end()) continue;
+		Aircraft* actor = it->second;
+		if (actor && !actor->IsDestroyed())
+			alive_positions.push_back(actor->getPosition());
+	}
+
+	if (alive_positions.empty())
 		return;
 
 	sf::Vector2f camera_target;
 	float target_zoom;
 
-	if (alive_players.size() == 1)
+	if (alive_positions.size() == 1)
 	{
-		camera_target = alive_players[0]->getPosition();
+		camera_target = alive_positions[0];
 		target_zoom = m_min_zoom;
 	}
 	else
 	{
-		//Multiple players alive, calculate midpoint
-		sf::Vector2f sum_positions(0.f, 0.f);
-		for (Aircraft* player : alive_players)
+		// Midpoint of all players
+		sf::Vector2f sum(0.f, 0.f);
+		for (const auto& pos : alive_positions)
+			sum += pos;
+		camera_target = sum / static_cast<float>(alive_positions.size());
+
+		// Bounding box of all players
+		float min_x = alive_positions[0].x, max_x = alive_positions[0].x;
+		float min_y = alive_positions[0].y, max_y = alive_positions[0].y;
+		for (size_t i = 1; i < alive_positions.size(); ++i)
 		{
-			sum_positions += player->getPosition();
+			min_x = std::min(min_x, alive_positions[i].x);
+			max_x = std::max(max_x, alive_positions[i].x);
+			min_y = std::min(min_y, alive_positions[i].y);
+			max_y = std::max(max_y, alive_positions[i].y);
 		}
-		camera_target = sum_positions / static_cast<float>(alive_players.size());
 
-		if (alive_players.size() >= 2)
-		{
-			//Calculate bounding box of all players
-			float min_x = alive_players[0]->getPosition().x;
-			float max_x = alive_players[0]->getPosition().x;
-			float min_y = alive_players[0]->getPosition().y;
-			float max_y = alive_players[0]->getPosition().y;
+		const float padding = 200.f;
+		float required_width = (max_x - min_x) + (padding * 2.f);
+		float required_height = (max_y - min_y) + (padding * 2.f);
 
-			for (size_t i = 1; i < alive_players.size(); ++i)
-			{
-				sf::Vector2f pos = alive_players[i]->getPosition();
-				min_x = std::min(min_x, pos.x);
-				max_x = std::max(max_x, pos.x);
-				min_y = std::min(min_y, pos.y);
-				max_y = std::max(max_y, pos.y);
-			}
+		sf::Vector2f view_size = m_target.getDefaultView().getSize();
+		float zoom_for_width = required_width / view_size.x;
+		float zoom_for_height = required_height / view_size.y;
 
-			//Add padding around players
-			const float padding = 200.f;
-			float required_width = (max_x - min_x) + (padding * 2.f);
-			float required_height = (max_y - min_y) + (padding * 2.f);
-
-			//Calculate zoom needed to fit this area
-			sf::Vector2f view_size = m_target.getDefaultView().getSize();
-
-			//Calculate zoom factors needed for width and height
-			float zoom_for_width = required_width / view_size.x;
-			float zoom_for_height = required_height / view_size.y;
-
-			//Use the larger zoom to ensure both dimensions fit
-			target_zoom = std::max(zoom_for_width, zoom_for_height);
-			target_zoom = std::max(m_min_zoom, std::min(target_zoom, m_max_zoom));
-		}
-		else
-		{
-			target_zoom = m_min_zoom;
-		}
+		target_zoom = std::max(zoom_for_width, zoom_for_height);
+		target_zoom = std::max(m_min_zoom, std::min(target_zoom, m_max_zoom));
 	}
 
 	float zoom_delta = target_zoom - m_current_zoom_level;
 	m_current_zoom_level += zoom_delta * m_zoom_speed * dt.asSeconds();
 
 	sf::Vector2f cameraSize = m_target.getDefaultView().getSize() * m_current_zoom_level;
-
 	float half_width = cameraSize.x / 2.f;
 	float half_height = cameraSize.y / 2.f;
 
@@ -316,77 +353,121 @@ void World::UpdateCameraZoom(sf::Time dt)
 
 	m_camera = m_target.getDefaultView();
 	m_camera.zoom(m_current_zoom_level);
-
 	m_camera.setCenter(camera_target);
 }
 
 void World::CheckRoundEnd()
 {
+	// In network mode we have 1 local + N remote actors; in local mode we need 2+ local players.
+	const int total_combatants = static_cast<int>(m_player_aircrafts.size())
+		+ static_cast<int>(m_network_actors.size());
+	if (total_combatants < 2)
+		return;
+
 	if (m_round_over)
 		return;
 
 	int alive_count = CountAlivePlayers();
-	int last_alive_player = -1;
 
-	//Find which player is still alive
+	if (alive_count > 1)
+		return;
+
+	m_round_over = true;
+	m_round_restart_timer = sf::Time::Zero;
+
+	// Per-player status log
+	std::cout << "\n=== ROUND " << m_current_round << " OVER ===" << std::endl;
 	for (size_t i = 0; i < m_player_aircrafts.size(); ++i)
 	{
-		if (m_player_aircrafts[i] && !m_player_aircrafts[i]->IsDestroyed())
+		if (m_player_aircrafts[i])
 		{
-			last_alive_player = static_cast<int>(i);
+			bool is_alive = !m_player_aircrafts[i]->IsDestroyed();
+			int hp = m_player_aircrafts[i]->GetHitPoints();
+			std::cout << "Player " << (i + 1) << ": "
+				<< (is_alive ? "ALIVE" : "ELIMINATED")
+				<< " (HP: " << hp << ")" << std::endl;
 		}
 	}
 
-	//If 1 player alive
-	if (alive_count <= 1)
+	// Only the authoritative side (host / local game) increments scores
+	if (m_score_authoritative)
 	{
-		m_round_over = true;
-		m_round_restart_timer = sf::Time::Zero;
-
-
-		//Per player status
-		std::cout << "\n=== ROUND " << m_current_round << " OVER ===" << std::endl;
-		for (size_t i = 0; i < m_player_aircrafts.size(); ++i)
+		if (m_is_network_mode)
 		{
-			if (m_player_aircrafts[i])
+			// Network mode: use networkId as score slot so display order is consistent
+			int winner_net_id = -1;
+
+			// Check local aircraft
+			for (const Aircraft* p : m_player_aircrafts)
 			{
-				bool is_alive = !m_player_aircrafts[i]->IsDestroyed();
-				int hp = m_player_aircrafts[i]->GetHitPoints();
-				std::cout << "Player " << (i + 1) << ": "
-					<< (is_alive ? "ALIVE" : "ELIMINATED")
-					<< " (HP: " << hp << ")" << std::endl;
+				if (p && p->IsUsingPhysics() && !p->IsDestroyed())
+				{
+					winner_net_id = m_local_network_id;
+					break;
+				}
+			}
+
+			// Check remote network actors
+			for (const auto& kv : m_network_actors)
+			{
+				if (kv.second && !kv.second->IsDestroyed())
+				{
+					winner_net_id = static_cast<int>(kv.first);
+					break;
+				}
+			}
+
+			if (winner_net_id >= 0 && winner_net_id < static_cast<int>(m_player_scores.size()))
+			{
+				m_player_scores[winner_net_id]++;
+				std::cout << "\nNetwork Player " << winner_net_id << " WINS" << std::endl;
+			}
+			else
+			{
+				std::cout << "\nDRAW - All players eliminated!" << std::endl;
+			}
+		}
+		else
+		{
+			// Local game: use index in m_player_aircrafts as score slot
+			int last_alive_player = -1;
+			for (size_t i = 0; i < m_player_aircrafts.size(); ++i)
+			{
+				if (m_player_aircrafts[i] && !m_player_aircrafts[i]->IsDestroyed())
+					last_alive_player = static_cast<int>(i);
+			}
+
+			if (alive_count == 1 && last_alive_player >= 0)
+			{
+				m_player_scores[last_alive_player]++;
+				std::cout << "\nPlayer " << (last_alive_player + 1) << " WINS" << std::endl;
+			}
+			else
+			{
+				std::cout << "\nDRAW - Both players eliminated!" << std::endl;
 			}
 		}
 
-		if (alive_count == 1 && last_alive_player >= 0)
-		{
-			m_player_scores[last_alive_player]++;
-			std::cout << "\nPlayer " << (last_alive_player + 1) << " WINS" << std::endl;
-		}
-		else
-		{
-			//This probably won't happen in 2 player mode, but just in case
-			std::cout << "\nDRAW - Both players eliminated!" << std::endl;
-		}
-
-		std::cout << "\n--- SCORES ---" << std::endl;
-		for (size_t i = 0; i < m_player_scores.size(); ++i)
-		{
-			std::cout << "Player " << (i + 1) << ": " << m_player_scores[i] << " points" << std::endl;
-		}
-
-		if (IsGameOver())
-		{
-			int winner = GetWinner();
-			std::cout << "\n*** PLAYER " << (winner + 1) << " WINS THE GAME! ***" << std::endl;
-		}
-		else
-		{
-			std::cout << "\nNext round starts in " << m_round_restart_delay.asSeconds() << " seconds..." << std::endl;
-		}
-
-		std::cout << "====================\n" << std::endl;
+		m_scores_dirty = true;
 	}
+
+	std::cout << "\n--- SCORES ---" << std::endl;
+	for (size_t i = 0; i < m_player_scores.size(); ++i)
+	{
+		std::cout << "Player " << (i + 1) << ": " << m_player_scores[i] << " points" << std::endl;
+	}
+
+	if (IsGameOver())
+	{
+		int winner = GetWinner();
+		std::cout << "\n*** PLAYER " << (winner + 1) << " WINS THE GAME! ***" << std::endl;
+	}
+	else
+	{
+		std::cout << "\nNext round starts in " << m_round_restart_delay.asSeconds() << " seconds..." << std::endl;
+	}
+
+	std::cout << "====================\n" << std::endl;
 }
 
 void World::StartNewRound()
@@ -449,22 +530,22 @@ void World::StartNewRound()
 
 void World::RespawnPlayers()
 {
-	//Respawn each player, reset health, position, velocity, and clear forces/knockback
 	for (size_t i = 0; i < m_player_aircrafts.size(); ++i)
 	{
 		Aircraft* player = m_player_aircrafts[i];
 		if (!player)
 			continue;
 
-		int max_health = 100;
+		// Network actors are repositioned by snapshot — don't overwrite with spawn position
+		if (!player->IsUsingPhysics())
+			continue;
 
+		int max_health = 100;
 		player->Destroy();
 		player->Repair(max_health);
 
 		if (i < m_player_spawn_positions.size())
-		{
 			player->setPosition(m_player_spawn_positions[i]);
-		}
 
 		player->SetVelocity(0.f, 0.f);
 		player->ClearForces();
@@ -472,20 +553,44 @@ void World::RespawnPlayers()
 
 		std::cout << "Player " << (i + 1) << " respawned!" << std::endl;
 	}
+
+	// Pre-restore remote actors too — the snapshot will correct position/HP within
+	// one tick but this prevents a single-frame round-over flicker.
+	for (auto& kv : m_network_actors)
+	{
+		Aircraft* actor = kv.second;
+		if (actor && actor->IsDestroyed())
+		{
+			actor->Repair(100);
+		}
+	}
 }
 
 //Helper function to count how many players are still alive
 int World::CountAlivePlayers() const
 {
 	int count = 0;
+
+	// Count physics-owned local players
 	for (const Aircraft* player : m_player_aircrafts)
 	{
-		if (player && !player->IsDestroyed())
-		{
-			count++;
-		}
+		if (player && player->IsUsingPhysics() && !player->IsDestroyed())
+			++count;
 	}
+
+	// Count remote network actors (driven by snapshots, not local physics)
+	for (const auto& kv : m_network_actors)
+	{
+		if (kv.second && !kv.second->IsDestroyed())
+			++count;
+	}
+
 	return count;
+}
+
+void World::SetCollisionEnabled(bool enabled)
+{
+	m_collision_enabled = enabled;
 }
 
 //Helper function to get the score of a player by index
@@ -595,6 +700,58 @@ void World::UpdateRoundOverlay()
 	sf::FloatRect countdown_bounds = m_round_countdown_text->getLocalBounds();
 	m_round_countdown_text->setOrigin({ countdown_bounds.position.x + countdown_bounds.size.x / 2.f, countdown_bounds.position.y + countdown_bounds.size.y / 2.f });
 	m_round_countdown_text->setPosition({ view_center.x, view_center.y + 50.f });//Fixed screen position
+}
+
+void World::SetTotalNetworkPlayerCount(int count)
+{
+	if (count <= static_cast<int>(m_player_scores.size()))
+		return;
+
+	const float score_text_size = 2.f;
+	const float score_spacing = 60.f;
+
+	const int start = static_cast<int>(m_player_scores.size());
+	m_player_scores.resize(count, 0);
+
+	for (int i = start; i < count; ++i)
+	{
+		std::string placeholder = "0";
+		std::unique_ptr<TextNode> score_display(new TextNode(m_fonts, placeholder));
+		score_display->setPosition({ 20.f, 20.f + (i * score_spacing) });
+		score_display->setScale({ score_text_size, score_text_size });
+		score_display->SetColor(NetworkSlotColor(static_cast<std::uint8_t>(i)));
+		score_display->SetOutlineColor(sf::Color::Black);
+		score_display->SetOutlineThickness(3.f);
+		m_score_displays.push_back(score_display.get());
+		m_scene_layers[static_cast<int>(SceneLayers::kUI)]->AttachChild(std::move(score_display));
+	}
+
+	m_is_network_mode = true;
+}
+
+void World::ApplyNetworkScores(const std::vector<int>& scores)
+{
+	for (size_t i = 0; i < scores.size(); ++i)
+	{
+		if (i < m_player_scores.size())
+			m_player_scores[i] = scores[i];
+	}
+	UpdateScoreDisplay();
+}
+
+bool World::PollScoresChanged(std::vector<int>& outScores)
+{
+	if (!m_scores_dirty)
+		return false;
+
+	outScores = m_player_scores;
+	m_scores_dirty = false;
+	return true;
+}
+
+void World::SetScoreAuthoritative(bool isAuthoritative)
+{
+	m_score_authoritative = isAuthoritative;
 }
 
 void World::Draw()
@@ -1032,10 +1189,12 @@ void World::BuildScene()
 	{
 		AircraftType player_type = AircraftType::kEagle;
 
+		// Local aircraft always uses player_id 0 (so Player(0) commands reach it).
+		// Its *spawn position* is determined by the server-assigned network ID so that
+		// host spawns at slot 0 and the first client at slot 1, etc.
 		std::unique_ptr<Aircraft> player(new Aircraft(player_type, m_textures, m_fonts, i));
 		Aircraft* player_aircraft = player.get();
 
-		//Apply player color from config
 		auto& config = PlayerBindingConfig::GetInstance();
 		auto playerColor = config.GetPlayerColor(i);
 		if (playerColor.has_value())
@@ -1044,24 +1203,22 @@ void World::BuildScene()
 		}
 		else
 		{
-			//Fallback to default colors
 			std::vector<sf::Color> default_colors = {
 				sf::Color::Red, sf::Color::Yellow, sf::Color::Blue, sf::Color::Green,
 			};
 			if (i < static_cast<int>(default_colors.size()))
-			{
 				player_aircraft->SetPlayerColor(default_colors[i]);
-			}
 		}
 
-		if (i < static_cast<int>(m_player_spawn_positions.size()))
-		{
-			player_aircraft->setPosition(m_player_spawn_positions[i]);
-		}
+		// Use m_local_network_id to select the spawn position for this machine's player.
+		// For single-player / host: m_local_network_id = 0 → spawn[0].
+		// For client: m_local_network_id will be set by kSpawnSelf later, but we also
+		// reposition in SetLocalNetworkId(), so this is a safe default.
+		const int spawnSlot = m_local_network_id + i;
+		if (spawnSlot < static_cast<int>(m_player_spawn_positions.size()))
+			player_aircraft->setPosition(m_player_spawn_positions[spawnSlot]);
 		else
-		{
-			player_aircraft->setPosition({ 200.f + (i * 100.f), 0.f });
-		}
+			player_aircraft->setPosition({ 200.f + (spawnSlot * 100.f), 0.f });
 
 		m_scene_layers[static_cast<int>(SceneLayers::kUpperAir)]->AttachChild(std::move(player));
 
@@ -1138,7 +1295,7 @@ void World::BuildScene()
 				100 + (i * 50) % 155,
 				100 + (i * 70) % 155
 			);
-			score_display->SetColor(player_color);
+			score_display->SetColor(NetworkSlotColor(static_cast<std::uint8_t>(i)));  // ← palette color
 		}
 
 		score_display->SetOutlineColor(sf::Color::Black);
@@ -1427,10 +1584,40 @@ bool MatchesCategories(SceneNode::Pair& colliders, ReceiverCategories type1, Rec
 
 void World::HandleCollisions()
 {
-	std::set<SceneNode::Pair> collision_pairs;
-	m_scenegraph.CheckSceneCollision(m_scenegraph, collision_pairs);
+	//Rebuild flat list of collidable nodes (much smaller than full scene graph)
+	RebuildCollidablesList();
 
-	//Track grounded state per player
+	std::set<SceneNode::Pair> collision_pairs;
+	const std::size_t count = m_collidables.size();
+
+	for (std::size_t i = 0; i < count; ++i)
+	{
+		for (std::size_t j = i + 1; j < count; ++j)
+		{
+			SceneNode* a = m_collidables[i];
+			SceneNode* b = m_collidables[j];
+
+			if (a->IsDestroyed() || b->IsDestroyed())
+				continue;
+
+			unsigned int catA = a->GetCategory();
+			unsigned int catB = b->GetCategory();
+
+			if (catA == 0 || catB == 0)
+				continue;
+
+			// Use existing category filter
+			if (!SceneNode::CanPotentiallyCollide(catA, catB))
+				continue;
+
+			if (Collision(*a, *b))
+			{
+				collision_pairs.insert(std::minmax(a, b));
+			}
+		}
+	}
+
+	// Track grounded state per player
 	std::map<Aircraft*, bool> player_grounded_state;
 	for (Aircraft* player : m_player_aircrafts)
 	{
@@ -1879,6 +2066,146 @@ Aircraft* World::GetPlayerAircraft(int player_index)
 	return nullptr;
 }
 
+void World::SpawnNetworkActor(std::uint8_t networkId, const sf::Vector2f& position, const sf::Color& tint)
+{
+	if (m_network_actors.find(networkId) != m_network_actors.end())
+		return;
+
+	int playerSlot = static_cast<int>(networkId);
+
+	// CRITICAL: never overwrite a slot that already holds a locally-controlled
+	// physics aircraft.  On the client, slot 0 is the local player; the host's
+	// remote actor (also networkId 0 from the server's perspective) must NOT
+	// replace it.  The remote actor still lives in m_network_actors for snapshot
+	// interpolation — it just does not get a slot in m_player_aircrafts.
+	bool slotOccupiedByLocal = (playerSlot < static_cast<int>(m_player_aircrafts.size()))
+		&& m_player_aircrafts[playerSlot] != nullptr
+		&& m_player_aircrafts[playerSlot]->IsUsingPhysics();
+
+	if (slotOccupiedByLocal)
+	{
+		// Pass playerSlot so m_use_animations=true and animations initialize correctly
+		std::unique_ptr<Aircraft> actor(new Aircraft(AircraftType::kEagle, m_textures, m_fonts, playerSlot));
+		Aircraft* actorPtr = actor.get();
+
+		actorPtr->SetPlayerColor(tint);
+		actorPtr->setPosition(position);
+		actorPtr->SetUsePhysics(false);
+		actorPtr->SetVelocity(0.f, 0.f);
+
+		m_scene_layers[static_cast<int>(SceneLayers::kUpperAir)]->AttachChild(std::move(actor));
+		m_network_actors[networkId] = actorPtr;
+
+		std::cout << "[MP] SpawnNetworkActor id=" << static_cast<int>(networkId)
+			<< " slot=" << playerSlot << " (slot occupied by local -- floating actor only)\n";
+		return;
+	}
+
+	// Normal remote actor path (slot is free — e.g. host spawning client's actor).
+	while (static_cast<int>(m_player_aircrafts.size()) <= playerSlot)
+		m_player_aircrafts.push_back(nullptr);
+
+	while (static_cast<int>(m_player_scores.size()) <= playerSlot)
+		m_player_scores.push_back(0);
+
+	std::unique_ptr<Aircraft> actor(new Aircraft(AircraftType::kEagle, m_textures, m_fonts, playerSlot));
+	Aircraft* actorPtr = actor.get();
+
+	actorPtr->SetPlayerColor(tint);
+	actorPtr->setPosition(position);
+	actorPtr->SetUsePhysics(false);
+	actorPtr->SetVelocity(0.f, 0.f);
+
+	m_scene_layers[static_cast<int>(SceneLayers::kUpperAir)]->AttachChild(std::move(actor));
+	m_network_actors[networkId] = actorPtr;
+	m_player_aircrafts[playerSlot] = actorPtr;
+
+	if (playerSlot >= static_cast<int>(m_score_displays.size()))
+	{
+		const float score_text_size = 2.f;
+		const float score_spacing = 60.f;
+
+		std::string* score_text = new std::string("0");
+		std::unique_ptr<TextNode> score_display(new TextNode(m_fonts, *score_text));
+		score_display->setPosition({ 20.f, 20.f + (playerSlot * score_spacing) });
+		score_display->setScale({ score_text_size, score_text_size });
+		score_display->SetColor(tint);
+		score_display->SetOutlineColor(sf::Color::Black);
+		score_display->SetOutlineThickness(3.f);
+
+		m_score_displays.push_back(score_display.get());
+		m_scene_layers[static_cast<int>(SceneLayers::kUI)]->AttachChild(std::move(score_display));
+	}
+
+	m_player_count = static_cast<int>(m_player_aircrafts.size());
+
+	std::cout << "[MP] SpawnNetworkActor id=" << static_cast<int>(networkId)
+		<< " slot=" << playerSlot << " pos=(" << position.x << "," << position.y << ")\n";
+}
+
+void World::UpdateNetworkActorState(std::uint8_t networkId, const sf::Vector2f& position, std::uint8_t hp, std::uint8_t ammo, std::uint8_t anim)
+{
+	auto it = m_network_actors.find(networkId);
+	if (it == m_network_actors.end())
+		return;
+
+	Aircraft* actor = it->second;
+	if (!actor)
+	{
+		m_network_actors.erase(it);
+		return;
+	}
+
+	actor->setPosition(position);
+	actor->SetRemoteAnimState(anim);
+
+	// Sync health from authoritative host snapshot.
+	// Use Repair/Damage delta so audio/visual hit effects still fire.
+	const int currentHp = actor->GetHitPoints();
+	const int targetHp = static_cast<int>(hp);
+
+	if (targetHp > currentHp)
+	{
+		actor->Repair(targetHp - currentHp);
+	}
+	else if (targetHp < currentHp && targetHp > 0)
+	{
+		actor->Damage(currentHp - targetHp);
+	}
+	else if (targetHp <= 0 && !actor->IsDestroyed())
+	{
+		actor->Destroy();
+	}
+	else if (targetHp > 0 && actor->IsDestroyed())
+	{
+		// Round reset — server says this actor is alive again
+		actor->Repair(targetHp);
+	}
+
+	(void)ammo; // ammo sync can be added similarly if needed
+}
+
+void World::RemoveNetworkActor(std::uint8_t networkId)
+{
+	auto it = m_network_actors.find(networkId);
+	if (it == m_network_actors.end())
+		return;
+
+	Aircraft* actor = it->second;
+	int playerSlot = static_cast<int>(networkId);
+
+	// Null the slot BEFORE destroying so any concurrent iteration sees nullptr
+	if (playerSlot < static_cast<int>(m_player_aircrafts.size()))
+		m_player_aircrafts[playerSlot] = nullptr;
+
+	// Erase from map BEFORE calling Destroy so iterators
+	// in UpdateCameraZoom etc. never see a destroyed-but-mapped pointer
+	m_network_actors.erase(it);
+
+	if (actor)
+		actor->Destroy();
+}
+
 void World::UpdateSounds()
 {
 	// Set listener's position to first player's position (or could be average of all players)
@@ -1900,27 +2227,15 @@ void World::GenerateSpawnPositions()
 	const float edge_padding = 150.f;
 	const float usable_width = arena_width - (2.f * edge_padding);
 
-	if (m_player_count == 1)
-	{
-		//Single player spawns in center
-		m_player_spawn_positions.push_back({ arena_width / 2.f, spawn_y });
-	}
-	else if (m_player_count == 2)
-	{
-		//Two players spawn on left and right
-		m_player_spawn_positions.push_back({ edge_padding, spawn_y });
-		m_player_spawn_positions.push_back({ arena_width - edge_padding, spawn_y });
-	}
-	else
-	{
-		//Distribute players evenly across the arena
-		float spacing = usable_width / static_cast<float>(m_player_count - 1);
+	// Always pre-generate kMaxPlayers slots so any network ID is always valid.
+	// Positions are spread evenly; for 2-player the natural L/R split is preserved.
+	constexpr int kGenerateSlots = 20;
+	const float spacing = usable_width / static_cast<float>(kGenerateSlots - 1);
 
-		for (int i = 0; i < m_player_count; ++i)
-		{
-			float x_pos = edge_padding + (spacing * i);
-			m_player_spawn_positions.push_back({ x_pos, spawn_y });
-		}
+	for (int i = 0; i < kGenerateSlots; ++i)
+	{
+		float x_pos = edge_padding + (spacing * i);
+		m_player_spawn_positions.push_back({ x_pos, spawn_y });
 	}
 }
 
@@ -2107,4 +2422,86 @@ void World::AddPlatformVisualTilesFromTile(const TileData& tile)
 			m_scene_layers[static_cast<int>(SceneLayers::kUpperAir)]->AttachChild(std::move(sprite));
 		}
 	}
+}
+
+void World::RebuildCollidablesList()
+{
+	m_collidables.clear();
+	m_scenegraph.CollectCollidables(m_collidables);
+}
+
+void World::SetLocalNetworkId(int networkId)
+{
+	m_local_network_id = networkId;
+
+	//Reposition the already-built local aircraft to the correct spawn slot.
+	//kSpawnSelf arrives after BuildScene, so we move the aircraft here rather
+	//Than rebuilding the scene.
+	if (!m_player_aircrafts.empty() && m_player_aircrafts[0])
+	{
+		if (networkId < static_cast<int>(m_player_spawn_positions.size()))
+			m_player_aircrafts[0]->setPosition(m_player_spawn_positions[networkId]);
+	}
+}
+
+void World::SetNetworkActorColor(std::uint8_t networkId, const sf::Color& color)
+{
+	auto it = m_network_actors.find(networkId);
+	if (it != m_network_actors.end() && it->second && !it->second->IsDestroyed())
+		it->second->SetPlayerColor(color);
+
+	int slot = static_cast<int>(networkId);
+	if (slot < static_cast<int>(m_player_aircrafts.size())
+		&& m_player_aircrafts[slot]
+		&& !m_player_aircrafts[slot]->IsDestroyed()
+		&& !m_player_aircrafts[slot]->IsUsingPhysics())
+	{
+		m_player_aircrafts[slot]->SetPlayerColor(color);
+	}
+}
+
+std::uint8_t World::GetLocalPlayerAnimState(int playerSlot) const
+{
+	if (playerSlot < 0 || playerSlot >= static_cast<int>(m_player_aircrafts.size()))
+		return 0;
+	const Aircraft* a = m_player_aircrafts[playerSlot];
+	if (!a) return 0;
+
+	// Use the aircraft's stored facing direction — NOT velocity.
+	// vel.x is 0 when idle, which would wrongly reset facing to right every frame.
+	const bool facingRight = a->IsFacingRight();
+	const bool isRunning = std::abs(a->GetVelocity().x) > 10.f;
+
+	return static_cast<std::uint8_t>((facingRight ? 1u : 0u) | (isRunning ? 2u : 0u));
+}
+
+void World::SetOnProjectileFiredCallback(
+	std::function<void(std::uint8_t, sf::Vector2f, sf::Vector2f)> cb)
+{
+	m_on_projectile_fired = std::move(cb);
+}
+
+void World::SpawnNetworkProjectile(std::uint8_t ownerId, const sf::Vector2f& pos, const sf::Vector2f& vel)
+{
+	std::unique_ptr<Projectile> bullet(
+		new Projectile(ProjectileType::kAlliedBullet, m_textures));
+	bullet->setPosition(pos);
+	bullet->SetVelocity(vel);
+	bullet->MarkBroadcast();
+	m_scene_layers[static_cast<int>(SceneLayers::kUpperAir)]
+		->AttachChild(std::move(bullet));
+
+	std::cout << "[MP] SpawnNetworkProjectile owner=" << (int)ownerId
+		<< " pos=(" << pos.x << "," << pos.y << ")\n";
+}
+
+bool World::PollFiredProjectile(std::uint8_t& ownerId, sf::Vector2f& pos, sf::Vector2f& vel)
+{
+	if (m_pending_fired_projectiles.empty()) return false;
+	const auto& p = m_pending_fired_projectiles.front();
+	ownerId = p.ownerId;
+	pos = p.pos;
+	vel = p.vel;
+	m_pending_fired_projectiles.pop_front();
+	return true;
 }

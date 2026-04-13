@@ -58,6 +58,10 @@ public:
 	void SetPlayerColor(const sf::Color& color);
 	sf::Color GetPlayerColor() const;
 
+	bool IsFacingRight() const;
+
+	void SetRemoteAnimState(std::uint8_t animFlags);
+
 private:
 	virtual void DrawCurrent(sf::RenderTarget& target, sf::RenderStates states) const;
 	virtual void UpdateCurrent(sf::Time dt, CommandQueue& commands) override;

@@ -16,6 +16,9 @@ public:
 	float GetMaxSpeed() const;
 	float GetDamage() const;
 
+	bool WasBroadcast() const { return m_was_broadcast; }
+	void MarkBroadcast() { m_was_broadcast = true; }
+
 private:
 	virtual void UpdateCurrent(sf::Time dt, CommandQueue& commands) override;
 	virtual void DrawCurrent(sf::RenderTarget& target, sf::RenderStates states) const override;
@@ -25,5 +28,7 @@ private:
 	sf::Sprite m_sprite;
 	sf::Vector2f m_target_direction;
 	float m_damage_multiplier;
+
+	bool m_was_broadcast = false;
 };
 

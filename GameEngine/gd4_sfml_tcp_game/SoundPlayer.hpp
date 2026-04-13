@@ -20,6 +20,7 @@ public:
 	void SetListenerPosition(sf::Vector2f position);
 	sf::Vector2f GetListenerPosition() const;
 
+	~SoundPlayer();
 
 private:
 	SoundBufferHolder m_sound_buffers;

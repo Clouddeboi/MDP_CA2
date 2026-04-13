@@ -34,6 +34,12 @@ public:
 	void RemoveWrecks();
 	virtual unsigned int GetCategory() const;
 
+	void CollectCollidables(std::vector<SceneNode*>& out);
+	static bool CanPotentiallyCollide(unsigned int a, unsigned int b);
+
+	virtual bool IsDestroyed() const;
+	virtual bool IsMarkedForRemoval() const;
+
 private:
 	virtual void UpdateCurrent(sf::Time dt, CommandQueue& commands);
 	void UpdateChildren(sf::Time dt, CommandQueue& commands);
@@ -46,8 +52,6 @@ private:
 	
 
 	void CheckNodeCollision(SceneNode& node, std::set<Pair>& collison_pairs);
-	virtual bool IsDestroyed() const;
-	virtual bool IsMarkedForRemoval() const;
 
 private:
 	std::vector<Ptr> m_children;

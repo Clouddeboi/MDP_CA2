@@ -20,10 +20,10 @@ DerivedAction(Function fn)
 {
 	return [=](SceneNode& node, sf::Time dt)
 		{
-			//Check is the cast is safe
-			assert(dynamic_cast<GameObject*>(&node) != nullptr);
-			//Downcast and invoke the function
-			fn(static_cast<GameObject&>(node), dt);
+			if (auto* object = dynamic_cast<GameObject*>(&node))
+			{
+				fn(*object, dt);
+			}
 		};
 }
 
