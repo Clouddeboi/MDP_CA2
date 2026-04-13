@@ -246,6 +246,20 @@ void World::Update(sf::Time dt)
 		HandleCollisions();
 	}
 
+	// Nullify network actor map entries for nodes about to be freed by RemoveWrecks
+	for (auto& kv : m_network_actors)
+	{
+		if (kv.second && kv.second->IsMarkedForRemoval())
+			kv.second = nullptr;
+	}
+
+	// Also guard local player aircraft pointers for the same reason
+	for (Aircraft*& player : m_player_aircrafts)
+	{
+		if (player && player->IsMarkedForRemoval())
+			player = nullptr;
+	}
+
 	m_scenegraph.RemoveWrecks();
 
 	m_scenegraph.Update(sf::Time::Zero, m_command_queue);
