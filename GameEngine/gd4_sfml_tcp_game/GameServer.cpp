@@ -950,10 +950,4 @@ void GameServer::BroadcastNewRound(uint8_t levelIndex)
     packet << static_cast<uint8_t>(Server::PacketType::kNewRound);
     packet << levelIndex;
     SendToAll(packet);
-
-    // Also notify the host game-side (mirrors BroadcastProjectileSpawn pattern)
-    HostEvent ev;
-    ev.type = HostEvent::kNewRound;
-    ev.level_index = levelIndex;
-    PushHostEvent(ev);
 }
