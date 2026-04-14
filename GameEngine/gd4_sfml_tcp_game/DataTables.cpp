@@ -19,7 +19,7 @@ std::vector<AircraftData> InitializeAircraftData()
     data[static_cast<int>(AircraftType::kEagle)].m_has_gun = true;
     data[static_cast<int>(AircraftType::kEagle)].m_gun_texture = TextureID::kGun;
     data[static_cast<int>(AircraftType::kEagle)].m_gun_texture_rect = sf::IntRect({ 0, 0 }, { 32, 32 });
-    data[static_cast<int>(AircraftType::kEagle)].m_gun_offset = sf::Vector2f(0.f, -4.f);
+    data[static_cast<int>(AircraftType::kEagle)].m_gun_offset = sf::Vector2f(0.f, -2.f);
 
     //Player 2
     data[static_cast<int>(AircraftType::kEaglePlayer2)].m_hitpoints = 100;
