@@ -341,17 +341,11 @@ bool BindingState::Update(sf::Time dt)
 		const int localColor = m_player_slots[m_local_player_index].GetSelectedColorIndex();
 		const bool localReady = m_player_slots[m_local_player_index].IsReady();
 
-		m_network_sync_timer += dt;
-		const bool periodicSync = (m_network_sync_timer >= m_network_sync_interval);
-
-		if (localColor != m_last_sent_color || localReady != m_last_sent_ready || periodicSync)
+		if (localColor != m_last_sent_color || localReady != m_last_sent_ready)
 		{
 			GetContext().network->SendLobbyBindingState(m_local_player_index, localColor, localReady);
 			m_last_sent_color = localColor;
 			m_last_sent_ready = localReady;
-
-			if (periodicSync)
-				m_network_sync_timer = sf::Time::Zero;
 		}
 	}
 
