@@ -13,7 +13,11 @@ NetworkSession::NetworkSession()
 	, m_client_socket(nullptr)
 	, m_client_connected(false)
 	, m_last_error()
+
 {
+	m_lobby_ready_state.fill(false);
+	m_lobby_color_state.fill(-1);
+	m_lobby_connected.fill(false);
 }
 
 NetworkSession::~NetworkSession()
@@ -269,7 +273,13 @@ void NetworkSession::PollLobbyPackets()
 		bool ready = false;
 
 		while (m_server->PollClientLobbyBindingState(playerIndex, color, ready))
+		{
+			m_lobby_ready_state[playerIndex] = ready;
+			m_lobby_color_state[playerIndex] = color;
+			m_lobby_connected[playerIndex] = true;
+
 			m_pending_remote_binding_events.emplace_back(playerIndex, color, ready);
+		}
 
 		if (m_server->PollClientStartRequest())
 			m_pending_start_game = true;
@@ -304,8 +314,13 @@ void NetworkSession::PollLobbyPackets()
 					std::int32_t color = -1;
 					bool rdy = false;
 					peek >> playerIdx >> color >> rdy;
-					m_pending_remote_binding_events.emplace_back(
-						static_cast<int>(playerIdx), static_cast<int>(color), rdy);
+
+					const int idx = static_cast<int>(playerIdx);
+					m_lobby_ready_state[idx] = rdy;
+					m_lobby_color_state[idx] = static_cast<int>(color);
+					m_lobby_connected[idx] = true;
+
+					m_pending_remote_binding_events.emplace_back(idx, static_cast<int>(color), rdy);
 				}
 				else if (packetType == Server::PacketType::kLobbyStartGame)
 				{
@@ -328,11 +343,22 @@ void NetworkSession::PollLobbyPackets()
 						bool rdy = false;
 						bool connected = false;
 						peek >> playerIdx >> color >> rdy >> connected;
+
+						const int idx = static_cast<int>(playerIdx);
+
 						if (connected)
-							m_pending_remote_binding_events.emplace_back(
-								static_cast<int>(playerIdx), static_cast<int>(color), rdy);
+						{
+							m_lobby_ready_state[idx] = rdy;
+							m_lobby_color_state[idx] = static_cast<int>(color);
+							m_lobby_connected[idx] = true;
+
+							m_pending_remote_binding_events.emplace_back(idx, static_cast<int>(color), rdy);
+						}
 						else
-							m_pending_player_left_events.push_back(static_cast<int>(playerIdx));
+						{
+							m_lobby_connected[idx] = false;
+							m_pending_player_left_events.push_back(idx);
+						}
 					}
 				}
 				else if (packetType == Server::PacketType::kLobbyAssignedIndex)

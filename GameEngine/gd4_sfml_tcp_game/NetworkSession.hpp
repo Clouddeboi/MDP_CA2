@@ -8,6 +8,7 @@
 #include <tuple>
 #include <deque>
 #include <cstdint>
+#include <array>
 #include <SFML/Network/Packet.hpp>
 
 /*
@@ -100,6 +101,10 @@ private:
 	std::string m_last_error;
 
 	std::deque<std::tuple<int, int, bool>> m_pending_remote_binding_events;
+	std::array<bool, 4> m_lobby_ready_state{};
+	std::array<int, 4>  m_lobby_color_state{};
+	std::array<bool, 4> m_lobby_connected{};
+
 	bool m_pending_start_game = false;
 	std::deque<int> m_pending_player_left_events;
 
