@@ -66,6 +66,21 @@ BindingState::BindingState(StateStack& stack, Context context)
 
 void BindingState::Draw()
 {
+    sf::RenderWindow& window = *GetContext().window;
+
+    window.draw(m_background_sprite);
+
+    if (m_title_text)
+        window.draw(*m_title_text);
+
+    if (m_instructions_text)
+        window.draw(*m_instructions_text);
+
+    for (const auto& slot : m_player_slots)
+        window.draw(slot);
+
+    if (m_info_text)
+        window.draw(*m_info_text);
 }
 
 bool BindingState::Update(sf::Time dt)
@@ -187,32 +202,33 @@ void BindingState::RemovePlayer(int index)
 
 int BindingState::GetJoinedPlayerCount() const
 {
-    return 0;
+    return static_cast<int>(m_joined_players.size());
 }
 
 bool BindingState::CanAddMorePlayers() const
 {
-    return false;
+    return m_joined_players.size() < kMaxPlayers;
 }
 
 void BindingState::EnsurePlayerSlotExists(int playerIndex)
 {
-}
+    if (playerIndex < 0 || playerIndex >= kMaxPlayers)
+        return;
 
-//void BindingState::ApplyRemoteSlotState(int slotIndex, int colorIndex, bool ready)
-//{
-//    if (slotIndex < 0 || slotIndex >= kMaxPlayers)
-//        return;
-//
-//    EnsurePlayerSlotExists(slotIndex);
-//
-//    if (colorIndex >= 0)
-//        m_player_slots[slotIndex].SelectColorAtIndex(colorIndex);
-//
-//    m_player_slots[slotIndex].SetReady(ready);
-//
-//    if (slotIndex != m_local_player_index)
-//    {
-//        m_player_slots[slotIndex].ShowColorPicker(false);
-//    }
-//}
+    if (playerIndex < (int)m_joined_players.size())
+        return;
+
+    InputDeviceInfo dummyDevice;
+    dummyDevice.type = InputDeviceType::kKeyboardMouse;
+
+    PlayerBinding p;
+    p.playerId = playerIndex;
+    p.device = dummyDevice;
+
+    m_joined_players.push_back(p);
+
+    m_player_slots[playerIndex].SetPlayerInfo(playerIndex + 1, dummyDevice);
+    m_player_slots[playerIndex].SetNetworkMode(true);
+
+    std::cout << "[Lobby] Network player joined: " << playerIndex << "\n";
+}

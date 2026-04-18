@@ -48,8 +48,8 @@ public:
 	void MarkColorAsUnavailable(int colorIndex, bool unavailable);
 
 private:
-	void draw(sf::RenderTarget& target, sf::RenderStates states) const override;
 	void UpdateLayout();
+	void draw(sf::RenderTarget& target, sf::RenderStates states) const override;
 
 private:
 	FontHolder& m_fonts;
