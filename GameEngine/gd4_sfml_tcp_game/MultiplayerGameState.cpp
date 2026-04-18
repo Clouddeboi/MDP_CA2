@@ -454,21 +454,12 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 	{
 		std::uint8_t aircraftId = 0;
 		float x = 0.f, y = 0.f;
+		if (!(packet >> aircraftId >> x >> y)) return;
 
-		if (!(packet >> aircraftId >> x >> y))
-			return;
-
-		OnRemotePlayerConnected(aircraftId, x, y);
-
-		if (aircraftId == 0)
+		if (!IsKnownLocalNetworkId(aircraftId))
 		{
-			const sf::Color tint = NetworkSlotColor(aircraftId);
-
-			m_world.SpawnNetworkActor(
-				aircraftId,
-				{ x, y },
-				tint
-			);
+			//It's a genuine remote — register and spawn
+			OnRemotePlayerConnected(aircraftId, x, y);
 		}
 	}
 	break;

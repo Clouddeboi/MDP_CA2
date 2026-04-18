@@ -291,9 +291,10 @@ void NetworkSession::PollLobbyPackets()
 		if (m_server->PollClientStartRequest())
 			m_pending_start_game = true;
 
-		while (m_server->PollClientLeave(playerIndex))
+		while (m_server->PollClientLeave(playerIndex)) {
 			m_lobby_connected[playerIndex] = false;
 			m_pending_player_left_events.push_back(playerIndex);
+		}
 
 		return;
 	}
