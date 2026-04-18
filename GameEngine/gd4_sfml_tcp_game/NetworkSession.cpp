@@ -274,9 +274,16 @@ void NetworkSession::PollLobbyPackets()
 
 		while (m_server->PollClientLobbyBindingState(playerIndex, color, ready))
 		{
+			bool wasAlreadyConnected = m_lobby_connected[playerIndex];
+
 			m_lobby_ready_state[playerIndex] = ready;
 			m_lobby_color_state[playerIndex] = color;
-			m_lobby_connected[playerIndex] = true;
+
+			if (!wasAlreadyConnected)
+			{
+				m_lobby_connected[playerIndex] = true;
+				m_pending_player_joined_events.push_back(playerIndex);
+			}
 
 			m_pending_remote_binding_events.emplace_back(playerIndex, color, ready);
 		}
@@ -285,6 +292,7 @@ void NetworkSession::PollLobbyPackets()
 			m_pending_start_game = true;
 
 		while (m_server->PollClientLeave(playerIndex))
+			m_lobby_connected[playerIndex] = false;
 			m_pending_player_left_events.push_back(playerIndex);
 
 		return;
@@ -312,15 +320,15 @@ void NetworkSession::PollLobbyPackets()
 				{
 					std::uint8_t playerIdx = 0;
 					std::int32_t color = -1;
-					bool rdy = false;
-					peek >> playerIdx >> color >> rdy;
+					bool ready = false;
+					peek >> playerIdx >> color >> ready;
 
 					const int idx = static_cast<int>(playerIdx);
-					m_lobby_ready_state[idx] = rdy;
+					m_lobby_ready_state[idx] = ready;
 					m_lobby_color_state[idx] = static_cast<int>(color);
 					m_lobby_connected[idx] = true;
 
-					m_pending_remote_binding_events.emplace_back(idx, static_cast<int>(color), rdy);
+					m_pending_remote_binding_events.emplace_back(idx, static_cast<int>(color), ready);
 				}
 				else if (packetType == Server::PacketType::kLobbyStartGame)
 				{
@@ -335,24 +343,40 @@ void NetworkSession::PollLobbyPackets()
 				else if (packetType == Server::PacketType::kLobbySnapshot)
 				{
 					std::uint8_t count = 0;
-					peek >> count;
+					p >> count;
+
 					for (std::uint8_t i = 0; i < count; ++i)
 					{
 						std::uint8_t playerIdx = 0;
 						std::int32_t color = -1;
-						bool rdy = false;
+						bool ready = false;
 						bool connected = false;
-						peek >> playerIdx >> color >> rdy >> connected;
+
+						p >> playerIdx >> color >> ready >> connected;
 
 						const int idx = static_cast<int>(playerIdx);
 
 						if (connected)
 						{
-							m_lobby_ready_state[idx] = rdy;
-							m_lobby_color_state[idx] = static_cast<int>(color);
-							m_lobby_connected[idx] = true;
+							bool wasAlreadyConnected = m_lobby_connected[idx];
 
-							m_pending_remote_binding_events.emplace_back(idx, static_cast<int>(color), rdy);
+							m_lobby_ready_state[idx] = ready;
+							m_lobby_color_state[idx] = static_cast<int>(color);
+
+							if (!wasAlreadyConnected)
+							{
+								m_pending_player_joined_events.push_back(idx);
+							}
+
+							if (connected && !m_lobby_was_connected[idx])
+							{
+								m_pending_player_joined_events.push_back(idx);
+							}
+
+							m_lobby_was_connected[idx] = connected;
+
+							m_lobby_connected[idx] = true;
+							m_pending_remote_binding_events.emplace_back(idx, static_cast<int>(color), ready);
 						}
 						else
 						{
@@ -368,6 +392,15 @@ void NetworkSession::PollLobbyPackets()
 					m_pending_assigned_local_player_index = static_cast<int>(assigned);
 					m_has_pending_assigned_local_player_index = true;
 				}
+				else if (packetType == Server::PacketType::kPlayerConnect)
+				{
+					std::uint8_t playerId = 0;
+					float x, y;
+
+					peek >> playerId >> x >> y;
+
+					m_pending_player_joined_events.push_back(static_cast<int>(playerId));
+				}
 				else
 				{
 					// Not a lobby packet — preserve it for PollGameplayPacket
@@ -381,6 +414,9 @@ void NetworkSession::PollLobbyPackets()
 			{
 				m_client_connected = false;
 				m_pending_player_left_events.push_back(0);
+
+				for (int i = 0; i < 4; ++i)
+					m_lobby_connected[i] = false;
 			}
 
 			break;
@@ -534,4 +570,14 @@ void NetworkSession::SendGameplayPacket(sf::Packet& packet)
 		m_client_socket->setBlocking(false);
 		return;
 	}
+}
+
+bool NetworkSession::ConsumeRemotePlayerJoined(int& playerIndex)
+{
+	if (m_pending_player_joined_events.empty())
+		return false;
+
+	playerIndex = m_pending_player_joined_events.front();
+	m_pending_player_joined_events.pop_front();
+	return true;
 }

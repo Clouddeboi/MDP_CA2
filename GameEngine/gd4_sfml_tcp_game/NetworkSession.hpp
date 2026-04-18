@@ -89,6 +89,8 @@ public:
 	GameServer* GetServer();
 	const GameServer* GetServer() const;
 
+	bool ConsumeRemotePlayerJoined(int& playerIndex);
+
 private:
 	void SetError(const std::string& message);
 
@@ -115,4 +117,7 @@ private:
 	static constexpr float kHostSnapshotIntervalMs = 50.f;
 
 	std::deque<sf::Packet> m_pending_gameplay_packets;
+
+	std::deque<int> m_pending_player_joined_events;
+	std::array<bool, 4> m_lobby_was_connected{};
 };
