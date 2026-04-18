@@ -57,8 +57,22 @@ BindingState::BindingState(StateStack& stack, Context context)
 
     if (m_network_mode)
     {
-        m_local_player_index = GetContext().network->IsHosting() ? 0 : 1;
-        m_instructions_text->setString("Waiting in lobby...");
+        if (GetContext().network->IsHosting())
+        {
+            m_local_player_index = 0;
+
+            //Host adds themselves immediately
+            InputDeviceInfo dummy;
+            dummy.type = InputDeviceType::kKeyboardMouse;
+            AddPlayer(dummy);
+
+            m_instructions_text->setString("Host lobby - press ENTER to start");
+        }
+        else
+        {
+            m_local_player_index = 1;
+            m_instructions_text->setString("Waiting for host to start...");
+        }
     }
 
     std::cout << "[Lobby] Simplified lobby initialized\n";
@@ -76,8 +90,11 @@ void BindingState::Draw()
     if (m_instructions_text)
         window.draw(*m_instructions_text);
 
-    for (const auto& slot : m_player_slots)
-        window.draw(slot);
+    if (GetContext().network->IsHosting())
+    {
+        for (const auto& slot : m_player_slots)
+            window.draw(slot);
+    }
 
     if (m_info_text)
         window.draw(*m_info_text);
@@ -115,8 +132,16 @@ bool BindingState::Update(sf::Time dt)
         }
     }
 
-    std::string msg = "Players: " + std::to_string(GetJoinedPlayerCount()) +
-        " | Host will start the game";
+    std::string msg;
+
+    if (GetContext().network->IsHosting())
+    {
+        msg = "Players in lobby: " + std::to_string(GetJoinedPlayerCount()) + " | Press ENTER to start";
+    }
+    else
+    {
+        msg = "Waiting in lobby " + std::to_string(GetJoinedPlayerCount()) + "/" + std::to_string(kMaxPlayers) + " | Host will start soon";
+    }
     m_info_text->setString(msg);
     Utility::CentreOrigin(*m_info_text);
 
@@ -129,10 +154,16 @@ bool BindingState::HandleEvent(const sf::Event& event)
     {
         if (const auto* key = event.getIf<sf::Event::KeyPressed>())
         {
-            if (key->code == sf::Keyboard::Key::Enter &&
-                GetContext().network->IsHosting())
+            if (key->code == sf::Keyboard::Key::Enter && GetContext().network->IsHosting())
             {
                 GetContext().network->SendLobbyStartGame();
+
+                auto& config = PlayerBindingConfig::GetInstance();
+                config.SetPlayerCount(GetJoinedPlayerCount());
+
+                RequestStackPop();
+                RequestStackPush(StateID::kMultiplayerGame);
+
                 return false;
             }
 
