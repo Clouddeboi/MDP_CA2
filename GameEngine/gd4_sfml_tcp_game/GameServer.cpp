@@ -517,6 +517,25 @@ void GameServer::HandleIncomingConnections()
             m_peers[m_connected_players]->m_socket.send(hostInfoPacket);
         }
 
+        {
+            sf::Packet sync;
+            sync << static_cast<uint8_t>(Server::PacketType::kUpdateClientState);
+
+            sync << m_battlefield_rect.position.y + m_battlefield_rect.size.y;
+            sync << static_cast<uint8_t>(1);
+
+            const auto& h = m_aircraft_info[0];
+
+            sync << static_cast<uint8_t>(0)
+                << h.m_position.x << h.m_position.y
+                << h.m_velocity.x << h.m_velocity.y
+                << h.m_hitpoints
+                << h.m_missile_ammo
+                << h.m_anim;
+
+            m_peers[m_connected_players]->m_socket.send(sync);
+        }
+
         //Notify host about this new client
         {
             uint8_t newClientId = static_cast<uint8_t>(m_aircraft_identifier_counter - 1);
@@ -667,8 +686,7 @@ void GameServer::UpdateClientState()
 
     std::vector<uint8_t> playerIds;
 
-    //Include host aircraft (ID 0) — it has no peer entry but must be synced
-    if (m_aircraft_info.find(0) != m_aircraft_info.end())
+    if (m_aircraft_info.count(0))
         playerIds.push_back(0);
 
     for (std::size_t i = 0; i < m_connected_players; ++i)

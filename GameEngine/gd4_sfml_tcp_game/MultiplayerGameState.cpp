@@ -105,7 +105,7 @@ bool MultiplayerGameState::Update(sf::Time dt)
 
 		for (const auto& s : m_latest_snapshot)
 		{
-			if (IsKnownLocalNetworkId(s.id))
+			if (IsKnownLocalNetworkId(s.id) && s.id != 0)
 				continue;
 
 			if (m_known_remote_network_ids.find(s.id) == m_known_remote_network_ids.end())
@@ -454,10 +454,22 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 	{
 		std::uint8_t aircraftId = 0;
 		float x = 0.f, y = 0.f;
+
 		if (!(packet >> aircraftId >> x >> y))
 			return;
 
 		OnRemotePlayerConnected(aircraftId, x, y);
+
+		if (aircraftId == 0)
+		{
+			const sf::Color tint = NetworkSlotColor(aircraftId);
+
+			m_world.SpawnNetworkActor(
+				aircraftId,
+				{ x, y },
+				tint
+			);
+		}
 	}
 	break;
 
