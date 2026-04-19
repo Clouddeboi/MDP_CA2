@@ -464,10 +464,8 @@ void GameServer::HandleIncomingPackets(sf::Packet& packet, RemotePeer& receiving
 
 void GameServer::HandleIncomingConnections()
 {
-    if (!m_listening_state)
-    {
+    if (!m_listening_state || m_game_started)
         return;
-    }
 
     if (m_listener_socket.accept(m_peers[m_connected_players]->m_socket) == sf::TcpListener::Status::Done)
     {
@@ -620,7 +618,8 @@ void GameServer::HandleDisconnections()
             if (m_connected_players < m_max_connected_players)
             {
                 m_peers.emplace_back(PeerPtr(new RemotePeer()));
-                SetListening(true);
+                if (!m_game_started)
+                    SetListening(true);
             }
 
             BroadcastMessage("A player has disconnected");
@@ -728,6 +727,7 @@ void GameServer::BroadcastLobbyBindingState(uint8_t playerIndex, int colorIndex,
 
 void GameServer::BroadcastLobbyStartGame()
 {
+    m_game_started = true;
     SetListening(false);
 
     for (std::size_t i = 0; i < m_connected_players; ++i)

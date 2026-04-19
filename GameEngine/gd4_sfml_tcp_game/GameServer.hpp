@@ -171,4 +171,7 @@ private:
 	std::deque<HostEvent> m_host_events;
 
 	mutable std::mutex m_aircraft_mutex;
+
+	bool m_game_started = false;
+
 };
