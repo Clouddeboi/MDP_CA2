@@ -90,11 +90,14 @@ void BindingState::Draw()
     if (m_instructions_text)
         window.draw(*m_instructions_text);
 
-    if (GetContext().network->IsHosting())
-    {
-        for (const auto& slot : m_player_slots)
-            window.draw(slot);
-    }
+    //if (GetContext().network->IsHosting())
+    //{
+    //    for (const auto& slot : m_player_slots)
+    //        window.draw(slot);
+    //}
+
+    for (const auto& slot : m_player_slots)
+        window.draw(slot);
 
     if (m_info_text)
         window.draw(*m_info_text);
@@ -110,6 +113,13 @@ bool BindingState::Update(sf::Time dt)
         GetContext().network->PollLobbyPackets();
 
         int playerIndex = -1;
+
+        if (GetContext().network->IsHosting())
+        {
+            //Host slot 0 is always present, ensure it's displayed
+            if (m_joined_players.empty() || m_joined_players[0].playerId != 0)
+                EnsurePlayerSlotExists(0);
+        }
 
         while (GetContext().network->ConsumeRemotePlayerJoined(playerIndex))
         {

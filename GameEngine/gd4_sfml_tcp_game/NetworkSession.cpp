@@ -400,7 +400,8 @@ void NetworkSession::PollLobbyPackets()
 
 					peek >> playerId >> x >> y;
 
-					m_pending_player_joined_events.push_back(static_cast<int>(playerId));
+					//m_pending_player_joined_events.push_back(static_cast<int>(playerId));
+					m_pending_gameplay_packets.push_back(p);
 				}
 				else
 				{
