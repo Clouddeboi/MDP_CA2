@@ -222,23 +222,28 @@ void BindingState::AddPlayer(const InputDeviceInfo& device)
     std::cout << "[Lobby] Player joined: " << index << "\n";
 }
 
-void BindingState::RemovePlayer(int index)
+void BindingState::RemovePlayer(int playerIndex)
 {
-    if (index < 0 || index >= (int)m_joined_players.size())
+    //Find by playerId, not by vector position
+    auto it = std::find_if(m_joined_players.begin(), m_joined_players.end(),
+        [playerIndex](const PlayerBinding& p) { return p.playerId == playerIndex; });
+
+    if (it == m_joined_players.end())
         return;
 
-    m_joined_players.erase(m_joined_players.begin() + index);
+    m_joined_players.erase(it);
 
+    //Rebuild all slots from scratch
     for (int i = 0; i < kMaxPlayers; ++i)
         m_player_slots[i].Clear();
 
     for (size_t i = 0; i < m_joined_players.size(); ++i)
-    {
-        m_joined_players[i].playerId = i;
-        m_player_slots[i].SetPlayerInfo(i + 1, m_joined_players[i].device);
-    }
+        m_player_slots[m_joined_players[i].playerId].SetPlayerInfo(
+            m_joined_players[i].playerId + 1,
+            m_joined_players[i].device
+        );
 
-    std::cout << "[Lobby] Player removed: " << index << "\n";
+    std::cout << "[Lobby] Player removed: " << playerIndex << "\n";
 }
 
 int BindingState::GetJoinedPlayerCount() const
