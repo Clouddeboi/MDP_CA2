@@ -1426,9 +1426,9 @@ void World::AdaptPlayerPosition()
 
 			if (hit_left || hit_right || hit_top || hit_bottom)
 			{
-				const float k_knockback_speed_x = 2500.f;
-				const float k_knockback_speed_y = 2000.f;
-				const sf::Time kKnockbackDuration = sf::seconds(0.2f);
+				const float k_knockback_speed_x = 250.f;
+				const float k_knockback_speed_y = 200.f;
+				const sf::Time kKnockbackDuration = sf::seconds(0.1f);
 
 				float velocity_x = 0.f;
 				float velocity_y = 0.f;
@@ -1711,7 +1711,7 @@ void World::HandleCollisions()
 			auto& projectile = static_cast<Projectile&>(*pair.first);
 			auto& box = static_cast<Box&>(*pair.second);
 
-			const float k_projectile_knockback = 8000.f;
+			const float k_projectile_knockback = 80.f;
 			sf::Vector2f knockback_force = projectile.GetVelocity();
 			float length = std::sqrt(knockback_force.x * knockback_force.x + knockback_force.y * knockback_force.y);
 			if (length > 0.f)
@@ -1734,7 +1734,7 @@ void World::HandleCollisions()
 			//Collision response
 			aircraft.Damage(projectile.GetDamage());
 
-			const float k_projectile_knockback_multiplier = 1.5f;
+			const float k_projectile_knockback_multiplier = 1.f;
 			const sf::Time k_projectile_knockback_duration = sf::seconds(0.2f);
 			sf::Vector2f knockback_vel = projectile.GetVelocity() * k_projectile_knockback_multiplier;
 			aircraft.ApplyKnockback(knockback_vel, k_projectile_knockback_duration);
