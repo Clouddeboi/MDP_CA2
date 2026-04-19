@@ -261,7 +261,11 @@ void BindingState::EnsurePlayerSlotExists(int playerIndex)
     if (playerIndex < 0 || playerIndex >= kMaxPlayers)
         return;
 
-    if (playerIndex < (int)m_joined_players.size())
+    //Check by ID, not vector size
+    auto it = std::find_if(m_joined_players.begin(), m_joined_players.end(),
+        [playerIndex](const PlayerBinding& p) { return p.playerId == playerIndex; });
+
+    if (it != m_joined_players.end())
         return;
 
     InputDeviceInfo dummyDevice;
