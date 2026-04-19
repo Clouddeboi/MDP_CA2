@@ -1426,9 +1426,9 @@ void World::AdaptPlayerPosition()
 
 			if (hit_left || hit_right || hit_top || hit_bottom)
 			{
-				const float k_knockback_speed_x = 250.f;
-				const float k_knockback_speed_y = 200.f;
-				const sf::Time kKnockbackDuration = sf::seconds(0.1f);
+				const float k_knockback_speed_x = 1000.f;
+				const float k_knockback_speed_y = 750.f;
+				const sf::Time kKnockbackDuration = sf::seconds(0.125f);
 
 				float velocity_x = 0.f;
 				float velocity_y = 0.f;
