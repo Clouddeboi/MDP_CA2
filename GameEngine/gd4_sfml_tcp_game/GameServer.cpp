@@ -728,6 +728,8 @@ void GameServer::BroadcastLobbyBindingState(uint8_t playerIndex, int colorIndex,
 
 void GameServer::BroadcastLobbyStartGame()
 {
+    SetListening(false);
+
     for (std::size_t i = 0; i < m_connected_players; ++i)
     {
         if (!m_peers[i]->m_ready)
