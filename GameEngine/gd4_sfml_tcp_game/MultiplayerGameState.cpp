@@ -49,42 +49,20 @@ MultiplayerGameState::MultiplayerGameState(StateStack& stack, Context context)
 
 	if (isHost)
 	{
-		m_world.SetLocalNetworkId(0);
+		std::string myName = PlayerNameReader::GetName(0);
 
-		//Host is always network ID 0 — pick its color from the shared palette
-		const sf::Color hostColor = NetworkSlotColor(0);
+		Aircraft* a = m_world.GetPlayerAircraft(0);
+		if (a) a->SetPlayerName(myName);
+
 		auto* srv = GetContext().network->GetServer();
 		if (srv)
 		{
-			srv->SetAircraftColor(0, hostColor.r, hostColor.g, hostColor.b);
-
-			//Deliver color to host game-side immediately
-			GameServer::HostEvent ev;
-			ev.type = GameServer::HostEvent::kColorSync;
-			ev.aircraft_id = 0;
-			ev.r = hostColor.r;
-			ev.g = hostColor.g;
-			ev.b = hostColor.b;
-			srv->PushHostEvent(ev);
+			GameServer::HostEvent nameEv;
+			nameEv.type = GameServer::HostEvent::kNameSync;
+			nameEv.aircraft_id = 0;
+			nameEv.name = myName;
+			srv->PushHostEvent(nameEv);
 		}
-
-		std::string localName = GetContext().network->GetLocalPlayerName();
-		Aircraft* a = m_world.GetPlayerAircraft(0);
-		if (a && !localName.empty())
-			a->SetPlayerName(localName);
-
-		if (a)
-		{
-			a->SetPlayerColor(hostColor);
-			a->SetPlayerName(PlayerNameReader::GetName(0));
-		}
-
-		std::string myName = PlayerNameReader::GetName(0);
-		sf::Packet namePacket;
-		namePacket << static_cast<std::uint8_t>(Client::PacketType::kPlayerNameSync);
-		namePacket << static_cast<std::int32_t>(0); // Host is always ID 0
-		namePacket << myName;
-		GetContext().network->SendGameplayPacket(namePacket);
 	}
 
 	m_world.SetTotalNetworkPlayerCount(2);
@@ -636,7 +614,18 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 		std::string name;
 		if (!(packet >> id >> name)) return;
 
-		m_world.SetNetworkActorName(id, name);
+		//Check if this is our own local aircraft
+		auto localIt = m_net_to_local_player_index.find(id);
+		if (localIt != m_net_to_local_player_index.end())
+		{
+			Aircraft* a = m_world.GetPlayerAircraft(localIt->second);
+			if (a) a->SetPlayerName(name);
+		}
+		else
+		{
+			//It's a remote actor
+			m_world.SetNetworkActorName(id, name);
+		}
 
 		std::cout << "[MP] kPlayerNameSync id=" << (int)id << " name=" << name << "\n";
 	}
