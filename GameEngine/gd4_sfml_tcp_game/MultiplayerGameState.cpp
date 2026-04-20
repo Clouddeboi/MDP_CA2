@@ -62,6 +62,8 @@ MultiplayerGameState::MultiplayerGameState(StateStack& stack, Context context)
 			nameEv.aircraft_id = 0;
 			nameEv.name = myName;
 			srv->PushHostEvent(nameEv);
+
+			srv->SetHostName(myName);
 		}
 	}
 

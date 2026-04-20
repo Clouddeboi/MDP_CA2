@@ -1005,6 +1005,11 @@ void GameServer::BroadcastScores(const std::vector<int>& scores)
     SendToAll(packet);
 }
 
+void GameServer::SetHostName(const std::string& name)
+{
+    m_host_name = name;
+}
+
 void GameServer::BroadcastNewRound(uint8_t levelIndex)
 {
     sf::Packet packet;

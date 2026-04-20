@@ -87,6 +87,8 @@ public:
 
 	void BroadcastScores(const std::vector<int>& scores);
 
+	void SetHostName(const std::string& name);
+
 private:
 	struct RemotePeer
 	{
@@ -176,5 +178,5 @@ private:
 	mutable std::mutex m_aircraft_mutex;
 
 	bool m_game_started = false;
-
+	std::string m_host_name;
 };
