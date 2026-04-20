@@ -1,11 +1,23 @@
 #include "PlayerNameReader.hpp"
 #include <fstream>
+#include <iostream>
 
 namespace PlayerNameReader
 {
     std::string GetName(int playerIndex, const std::string& filename)
     {
         std::ifstream file(filename);
+
+        if (!file.is_open())
+        {
+            std::cerr << "[ERROR] Could not open name file: " << filename
+                << " - Using fallback name.\n";
+        }
+        else
+        {
+            std::cout << "[DEBUG] Successfully opened " << filename << "\n";
+        }
+
         std::string line;
         int current = 0;
 
@@ -13,13 +25,13 @@ namespace PlayerNameReader
         {
             if (current == playerIndex)
             {
-                //7 characters max
-                return line.length() > 7 ? line.substr(0, 7) : line;
+                std::string name = line.length() > 7 ? line.substr(0, 7) : line;
+                std::cout << "[DEBUG] Found name for index " << playerIndex << ": " << name << "\n";
+                return name;
             }
             current++;
         }
 
-        //Fallback name if the file doesn't exist or doesn't have enough lines
         std::string fallback = "Player" + std::to_string(playerIndex + 1);
         return fallback.length() > 7 ? fallback.substr(0, 7) : fallback;
     }
