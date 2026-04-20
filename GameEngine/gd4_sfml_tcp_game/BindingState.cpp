@@ -123,11 +123,13 @@ bool BindingState::Update(sf::Time dt)
 
         while (GetContext().network->ConsumeRemotePlayerJoined(playerIndex))
         {
+            std::cout << "[Lobby] ConsumeRemotePlayerJoined index=" << playerIndex << "\n";
             EnsurePlayerSlotExists(playerIndex);
         }
 
         while (GetContext().network->ConsumeRemotePlayerLeft(playerIndex))
         {
+            std::cout << "[Lobby] ConsumeRemotePlayerLeft index=" << playerIndex << "\n";
             RemovePlayer(playerIndex);
         }
 
@@ -242,6 +244,11 @@ void BindingState::RemovePlayer(int playerIndex)
             m_joined_players[i].playerId + 1,
             m_joined_players[i].device
         );
+
+    std::cout << "[Lobby] RemovePlayer called with index=" << playerIndex << " joined_players size=" << m_joined_players.size() << "\n";
+
+    for (auto& jp : m_joined_players)
+        std::cout << "  existing playerId=" << jp.playerId << "\n";
 
     std::cout << "[Lobby] Player removed: " << playerIndex << "\n";
 }
