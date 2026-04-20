@@ -543,6 +543,22 @@ uint8_t World::GetCurrentLevelIndex() const
 	return static_cast<uint8_t>(m_current_level_index);
 }
 
+Aircraft* World::GetAircraftByNetworkId(int networkId)
+{
+	if (networkId == m_local_network_id)
+	{
+		return GetPlayerAircraft(0);
+	}
+
+	auto found = m_network_actors.find(networkId);
+	if (found != m_network_actors.end())
+	{
+		return found->second;
+	}
+
+	return nullptr;
+}
+
 bool World::PollNewRoundBroadcast(uint8_t& outLevelIndex)
 {
 	if (!m_new_round_broadcast_ready)

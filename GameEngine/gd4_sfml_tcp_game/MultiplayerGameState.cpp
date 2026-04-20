@@ -6,6 +6,7 @@
 #include "NetworkSession.hpp"
 #include "GameServer.hpp"
 #include "NetworkSlotColor.hpp"
+#include "PlayerNameReader.hpp"
 #include <iostream>
 #include <algorithm>
 #include <cstdint>
@@ -501,6 +502,22 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 		Aircraft* a = m_world.GetPlayerAircraft(0);
 		if (a) a->SetPlayerColor(myColor);
 
+		if (GetContext().network)
+		{
+			//Read the name for this local slot
+			std::string myName = PlayerNameReader::GetName(0);
+			std::cout << "[DEBUG] My ID is " << (int)aircraftId << ", sending name: " << myName << "\n";
+
+			//Wrap it in a packet
+			sf::Packet namePacket;
+			namePacket << static_cast<std::uint8_t>(Client::PacketType::kPlayerNameSync);
+			namePacket << static_cast<std::int32_t>(aircraftId);
+			namePacket << myName;
+
+			//Send to server so it can tell everyone else
+			GetContext().network->SendGameplayPacket(namePacket);
+		}
+
 		if (GetContext().network && GetContext().network->IsClient())
 		{
 			if (a)
@@ -590,6 +607,22 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 		for (int i = 0; i < static_cast<int>(scores.size()); ++i)
 			std::cout << "P" << i << "=" << scores[i] << " ";
 		std::cout << "\n";
+	}
+	break;
+	case Server::PacketType::kPlayerNameSync:
+	{
+		std::int32_t aircraftId;
+		std::string name;
+		if (packet >> aircraftId >> name)
+		{
+			std::cout << "[DEBUG] Received NameSync: Aircraft " << aircraftId << " = " << name << "\n";
+
+			Aircraft* a = m_world.GetAircraftByNetworkId(static_cast<int>(aircraftId));
+			if (a)
+			{
+				a->SetPlayerName(name);
+			}
+		}
 	}
 	break;
 	case Server::PacketType::kPlayerColorSync:

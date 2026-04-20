@@ -79,6 +79,8 @@ public:
 	void  StartNewRoundWithLevel(uint8_t levelIndex);    // client calls on kNewRound receipt
 	uint8_t GetCurrentLevelIndex() const;
 
+	Aircraft* GetAircraftByNetworkId(int networkId);
+
 private:
 	void LoadTextures();
 	void BuildScene();
