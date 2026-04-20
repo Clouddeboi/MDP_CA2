@@ -433,6 +433,30 @@ void GameServer::HandleIncomingPackets(sf::Packet& packet, RemotePeer& receiving
         PushHostEvent(ev);
     }
     break;
+    case Client::PacketType::kPlayerNameSync:
+    {
+        std::int32_t aircraftId;
+        std::string name;
+        if (packet >> aircraftId >> name)
+        {
+            {
+                std::scoped_lock lock(m_aircraft_mutex);
+                m_aircraft_info[aircraftId].m_player_name = name;
+            }
+
+            sf::Packet relay;
+            relay << static_cast<std::uint8_t>(Server::PacketType::kPlayerNameSync);
+            relay << aircraftId << name;
+            SendToAll(relay);
+
+            HostEvent ev;
+            ev.type = HostEvent::kNameSync;
+            ev.aircraft_id = static_cast<std::uint8_t>(aircraftId);
+            ev.name = name;
+            PushHostEvent(ev);
+        }
+        break;
+    }
     case Client::PacketType::kLobbyLeave:
     {
         std::uint8_t clientSentIndex = 0;
@@ -562,6 +586,20 @@ void GameServer::HandleIncomingConnections()
                    << kv.second.m_color_g
                    << kv.second.m_color_b;
                 m_peers[m_connected_players]->m_socket.send(cp);
+            }
+        }
+
+        {
+            std::scoped_lock lock(m_aircraft_mutex);
+            for (const auto& kv : m_aircraft_info)
+            {
+                if (!kv.second.m_player_name.empty())
+                {
+                    sf::Packet namePacket;
+                    namePacket << static_cast<uint8_t>(Server::PacketType::kPlayerNameSync);
+                    namePacket << static_cast<std::int32_t>(kv.first) << kv.second.m_player_name;
+                    m_peers[m_connected_players]->m_socket.send(namePacket);
+                }
             }
         }
 
@@ -926,6 +964,19 @@ void GameServer::BroadcastAllColors()
             << kv.second.m_color_r
             << kv.second.m_color_g
             << kv.second.m_color_b;
+        SendToAll(p);
+    }
+}
+
+void GameServer::BroadcastAllNames()
+{
+    std::scoped_lock lock(m_aircraft_mutex);
+    for (const auto& kv : m_aircraft_info)
+    {
+        sf::Packet p;
+        p << static_cast<uint8_t>(Server::PacketType::kPlayerNameSync);
+        p << kv.first;
+        p << kv.second.m_player_name;
         SendToAll(p);
     }
 }

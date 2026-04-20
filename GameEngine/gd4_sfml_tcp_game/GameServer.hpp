@@ -53,6 +53,7 @@ public:
 	void UpdateHostAircraftState(const sf::Vector2f& pos, uint8_t hp, uint8_t ammo, uint8_t anim = 0);
 	void SetAircraftColor(uint8_t id, uint8_t r, uint8_t g, uint8_t b);
 	void BroadcastAllColors();
+	void BroadcastAllNames();
 
 	void BroadcastProjectileSpawn(uint8_t ownerId, float x, float y, float vx, float vy);
 	void BroadcastNewRound(uint8_t levelIndex);
@@ -71,12 +72,13 @@ public:
 
 	struct HostEvent
 	{
-		enum Type { kConnect, kDisconnect, kColorSync, kSpawnProjectile };
+		enum Type { kConnect, kDisconnect, kColorSync, kSpawnProjectile, kNameSync };
 		Type type;
 		uint8_t aircraft_id;
 		float x = 0.f, y = 0.f;
 		float vx = 0.f, vy = 0.f;
 		uint8_t r = 255, g = 255, b = 255;
+		std::string name;
 	};
 
 	void UpdateHostAircraftState(const sf::Vector2f& pos, const sf::Vector2f& vel, uint8_t hp, uint8_t ammo, uint8_t anim = 0);
@@ -102,6 +104,7 @@ private:
 	{
 		sf::Vector2f m_position;
 		uint8_t m_hitpoints;
+		std::string m_player_name = "Player";
 		uint8_t m_missile_ammo;
 		std::map<uint8_t, bool> m_real_time_actions;
 

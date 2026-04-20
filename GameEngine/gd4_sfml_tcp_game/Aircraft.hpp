@@ -62,6 +62,9 @@ public:
 
 	void SetRemoteAnimState(std::uint8_t animFlags);
 
+	void SetPlayerName(const std::string& name);
+	std::string GetPlayerName() const;
+
 private:
 	virtual void DrawCurrent(sf::RenderTarget& target, sf::RenderStates states) const;
 	virtual void UpdateCurrent(sf::Time dt, CommandQueue& commands) override;
@@ -148,5 +151,8 @@ private:
 
 	sf::Color m_player_color;
 	bool m_using_color_tint;
+
+	TextNode* m_name_display;
+	std::string m_player_name;
 };
 

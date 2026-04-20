@@ -524,6 +524,11 @@ bool NetworkSession::PollGameplayPacket(sf::Packet& outPacket)
 				outPacket << static_cast<std::uint8_t>(Server::PacketType::kPlayerColorSync);
 				outPacket << event.aircraft_id << event.r << event.g << event.b;
 			}
+			else if (event.type == GameServer::HostEvent::kNameSync)
+			{
+				outPacket << static_cast<std::uint8_t>(Server::PacketType::kPlayerNameSync);
+				outPacket << event.aircraft_id << event.name;
+			}
 			else if (event.type == GameServer::HostEvent::kSpawnProjectile)
 			{
 				outPacket << static_cast<std::uint8_t>(Server::PacketType::kSpawnProjectile);
@@ -584,4 +589,14 @@ bool NetworkSession::ConsumeRemotePlayerJoined(int& playerIndex)
 	playerIndex = m_pending_player_joined_events.front();
 	m_pending_player_joined_events.pop_front();
 	return true;
+}
+
+void NetworkSession::SendPlayerNameSync(std::int32_t aircraftId, const std::string& name)
+{
+	sf::Packet packet;
+	packet << static_cast<std::uint8_t>(Client::PacketType::kPlayerNameSync);
+	packet << aircraftId;
+	packet << name;
+
+	SendGameplayPacket(packet);
 }

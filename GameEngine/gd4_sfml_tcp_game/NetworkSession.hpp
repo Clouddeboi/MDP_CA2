@@ -91,6 +91,8 @@ public:
 
 	bool ConsumeRemotePlayerJoined(int& playerIndex);
 
+	void SendPlayerNameSync(std::int32_t aircraftId, const std::string& name);
+
 private:
 	void SetError(const std::string& message);
 
