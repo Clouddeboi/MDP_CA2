@@ -591,7 +591,8 @@ void GameServer::HandleIncomingConnections()
                 {
                     sf::Packet namePacket;
                     namePacket << static_cast<uint8_t>(Server::PacketType::kPlayerNameSync);
-                    namePacket << static_cast<std::int32_t>(kv.first) << kv.second.m_player_name;
+                    namePacket << static_cast<uint8_t>(kv.first)
+                        << kv.second.m_player_name;
                     m_peers[m_connected_players]->m_socket.send(namePacket);
                 }
             }
