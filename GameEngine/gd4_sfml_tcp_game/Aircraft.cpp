@@ -169,6 +169,11 @@ Aircraft::Aircraft(AircraftType type, const TextureHolder& textures, const FontH
 	m_health_display = health_display.get();
 	AttachChild(std::move(health_display));
 
+	std::string* name_str = new std::string("");
+	std::unique_ptr<TextNode> name_display(new TextNode(fonts, *name_str));
+	m_name_display = name_display.get();
+	AttachChild(std::move(name_display));
+
 	if (Aircraft::GetCategory() == static_cast<int>(ReceiverCategories::kPlayerAircraft))
 	{
 		std::string* missile_ammo = new std::string("");
@@ -359,6 +364,16 @@ void Aircraft::UpdateTexts()
 	m_health_display->SetColor(sf::Color::White);
 	m_health_display->SetOutlineColor(sf::Color::Black);
 	m_health_display->SetOutlineThickness(2.f);
+
+	if (m_name_display && !m_player_name.empty())
+	{
+		m_name_display->setPosition({ 0.f, -70.f });
+		m_name_display->setRotation(-getRotation());
+
+		m_name_display->SetColor(sf::Color::Cyan);
+		m_name_display->SetOutlineColor(sf::Color::Black);
+		m_name_display->SetOutlineThickness(2.f);
+	}
 }
 
 void Aircraft::UpdateMovementPattern(sf::Time dt)
@@ -926,4 +941,18 @@ void Aircraft::SetRemoteAnimState(std::uint8_t animFlags)
 bool Aircraft::IsFacingRight() const
 {
 	return m_facing_right;
+}
+
+void Aircraft::SetPlayerName(const std::string& name)
+{
+	m_player_name = name;
+	if (m_name_display)
+	{
+		m_name_display->SetString(m_player_name);
+	}
+}
+
+std::string Aircraft::GetPlayerName() const
+{
+	return m_player_name;
 }

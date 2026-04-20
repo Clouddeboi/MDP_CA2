@@ -34,9 +34,11 @@ namespace Server
 		kLobbySnapshot,
 		kLobbyAssignedIndex,
 		kPlayerColorSync,
+		kPlayerNameSync,
 		kSpawnProjectile,
 		kScoreUpdate,
-		kNewRound
+		kNewRound,
+		kPlayerReadyState
 	};
 }
 
@@ -54,7 +56,9 @@ namespace Client
 		kLobbyStartGameRequest,//no payload (client asks host)
 		kLobbyLeave,
 		kPlayerColorSync,
-		kFireProjectile
+		kPlayerNameSync,
+		kFireProjectile,
+		PlayerReady
 	};
 }
 

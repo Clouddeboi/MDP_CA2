@@ -433,6 +433,24 @@ void GameServer::HandleIncomingPackets(sf::Packet& packet, RemotePeer& receiving
         PushHostEvent(ev);
     }
     break;
+    case Client::PacketType::kPlayerNameSync:
+    {
+        std::int32_t id = 0;
+        std::string name;
+        packet >> id >> name;
+
+        HostEvent ev;
+        ev.type = HostEvent::kNameSync;
+        ev.aircraft_id = static_cast<uint8_t>(id);
+        ev.name = name;
+        PushHostEvent(ev);
+
+        sf::Packet out;
+        out << static_cast<uint8_t>(Server::PacketType::kPlayerNameSync)
+            << static_cast<uint8_t>(id) << name;
+        SendToAll(out);
+    }
+    break;
     case Client::PacketType::kLobbyLeave:
     {
         std::uint8_t clientSentIndex = 0;
@@ -464,10 +482,8 @@ void GameServer::HandleIncomingPackets(sf::Packet& packet, RemotePeer& receiving
 
 void GameServer::HandleIncomingConnections()
 {
-    if (!m_listening_state)
-    {
+    if (!m_listening_state || m_game_started)
         return;
-    }
 
     if (m_listener_socket.accept(m_peers[m_connected_players]->m_socket) == sf::TcpListener::Status::Done)
     {
@@ -517,6 +533,25 @@ void GameServer::HandleIncomingConnections()
             m_peers[m_connected_players]->m_socket.send(hostInfoPacket);
         }
 
+        {
+            sf::Packet sync;
+            sync << static_cast<uint8_t>(Server::PacketType::kUpdateClientState);
+
+            sync << m_battlefield_rect.position.y + m_battlefield_rect.size.y;
+            sync << static_cast<uint8_t>(1);
+
+            const auto& h = m_aircraft_info[0];
+
+            sync << static_cast<uint8_t>(0)
+                << h.m_position.x << h.m_position.y
+                << h.m_velocity.x << h.m_velocity.y
+                << h.m_hitpoints
+                << h.m_missile_ammo
+                << h.m_anim;
+
+            m_peers[m_connected_players]->m_socket.send(sync);
+        }
+
         //Notify host about this new client
         {
             uint8_t newClientId = static_cast<uint8_t>(m_aircraft_identifier_counter - 1);
@@ -547,6 +582,24 @@ void GameServer::HandleIncomingConnections()
                 m_peers[m_connected_players]->m_socket.send(cp);
             }
         }
+
+        {
+            std::scoped_lock lock(m_aircraft_mutex);
+            for (const auto& kv : m_aircraft_info)
+            {
+                if (!kv.second.m_player_name.empty())
+                {
+                    sf::Packet namePacket;
+                    namePacket << static_cast<uint8_t>(Server::PacketType::kPlayerNameSync);
+                    namePacket << static_cast<uint8_t>(kv.first)
+                        << kv.second.m_player_name;
+                    m_peers[m_connected_players]->m_socket.send(namePacket);
+                }
+            }
+        }
+
+        BroadcastAllNames();
+        BroadcastAllColors();
 
         m_aircraft_count++;
         m_connected_players++;
@@ -601,7 +654,8 @@ void GameServer::HandleDisconnections()
             if (m_connected_players < m_max_connected_players)
             {
                 m_peers.emplace_back(PeerPtr(new RemotePeer()));
-                SetListening(true);
+                if (!m_game_started)
+                    SetListening(true);
             }
 
             BroadcastMessage("A player has disconnected");
@@ -667,8 +721,7 @@ void GameServer::UpdateClientState()
 
     std::vector<uint8_t> playerIds;
 
-    //Include host aircraft (ID 0) — it has no peer entry but must be synced
-    if (m_aircraft_info.find(0) != m_aircraft_info.end())
+    if (m_aircraft_info.count(0))
         playerIds.push_back(0);
 
     for (std::size_t i = 0; i < m_connected_players; ++i)
@@ -710,6 +763,9 @@ void GameServer::BroadcastLobbyBindingState(uint8_t playerIndex, int colorIndex,
 
 void GameServer::BroadcastLobbyStartGame()
 {
+    m_game_started = true;
+    SetListening(false);
+
     for (std::size_t i = 0; i < m_connected_players; ++i)
     {
         if (!m_peers[i]->m_ready)
@@ -910,6 +966,19 @@ void GameServer::BroadcastAllColors()
     }
 }
 
+void GameServer::BroadcastAllNames()
+{
+    std::scoped_lock lock(m_aircraft_mutex);
+    for (const auto& kv : m_aircraft_info)
+    {
+        sf::Packet p;
+        p << static_cast<uint8_t>(Server::PacketType::kPlayerNameSync);
+        p << kv.first;
+        p << kv.second.m_player_name;
+        SendToAll(p);
+    }
+}
+
 void GameServer::BroadcastProjectileSpawn(uint8_t ownerId, float x, float y, float vx, float vy)
 {
     //Broadcast to all connected clients
@@ -935,6 +1004,14 @@ void GameServer::BroadcastScores(const std::vector<int>& scores)
     for (int s : scores)
         packet << static_cast<int32_t>(s);
     SendToAll(packet);
+}
+
+void GameServer::SetHostName(const std::string& name)
+{
+    m_host_name = name;
+
+    std::scoped_lock lock(m_aircraft_mutex);
+    m_aircraft_info[0].m_player_name = name;
 }
 
 void GameServer::BroadcastNewRound(uint8_t levelIndex)

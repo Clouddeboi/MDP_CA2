@@ -6,6 +6,7 @@
 #include "NetworkSession.hpp"
 #include "GameServer.hpp"
 #include "NetworkSlotColor.hpp"
+#include "PlayerNameReader.hpp"
 #include <iostream>
 #include <algorithm>
 #include <cstdint>
@@ -48,27 +49,22 @@ MultiplayerGameState::MultiplayerGameState(StateStack& stack, Context context)
 
 	if (isHost)
 	{
-		m_world.SetLocalNetworkId(0);
+		std::string myName = PlayerNameReader::GetName(0);
 
-		//Host is always network ID 0 — pick its color from the shared palette
-		const sf::Color hostColor = NetworkSlotColor(0);
+		Aircraft* a = m_world.GetPlayerAircraft(0);
+		if (a) a->SetPlayerName(myName);
+
 		auto* srv = GetContext().network->GetServer();
 		if (srv)
 		{
-			srv->SetAircraftColor(0, hostColor.r, hostColor.g, hostColor.b);
+			GameServer::HostEvent nameEv;
+			nameEv.type = GameServer::HostEvent::kNameSync;
+			nameEv.aircraft_id = 0;
+			nameEv.name = myName;
+			srv->PushHostEvent(nameEv);
 
-			//Deliver color to host game-side immediately
-			GameServer::HostEvent ev;
-			ev.type = GameServer::HostEvent::kColorSync;
-			ev.aircraft_id = 0;
-			ev.r = hostColor.r;
-			ev.g = hostColor.g;
-			ev.b = hostColor.b;
-			srv->PushHostEvent(ev);
+			srv->SetHostName(myName);
 		}
-
-		Aircraft* a = m_world.GetPlayerAircraft(0);
-		if (a) a->SetPlayerColor(hostColor);
 	}
 
 	m_world.SetTotalNetworkPlayerCount(2);
@@ -105,7 +101,7 @@ bool MultiplayerGameState::Update(sf::Time dt)
 
 		for (const auto& s : m_latest_snapshot)
 		{
-			if (IsKnownLocalNetworkId(s.id))
+			if (IsKnownLocalNetworkId(s.id) && s.id != 0)
 				continue;
 
 			if (m_known_remote_network_ids.find(s.id) == m_known_remote_network_ids.end())
@@ -454,10 +450,13 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 	{
 		std::uint8_t aircraftId = 0;
 		float x = 0.f, y = 0.f;
-		if (!(packet >> aircraftId >> x >> y))
-			return;
+		if (!(packet >> aircraftId >> x >> y)) return;
 
-		OnRemotePlayerConnected(aircraftId, x, y);
+		if (!IsKnownLocalNetworkId(aircraftId))
+		{
+			//It's a genuine remote — register and spawn
+			OnRemotePlayerConnected(aircraftId, x, y);
+		}
 	}
 	break;
 
@@ -498,6 +497,22 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 		Aircraft* a = m_world.GetPlayerAircraft(0);
 		if (a) a->SetPlayerColor(myColor);
 
+		if (GetContext().network)
+		{
+			//Read the name for this local slot
+			std::string myName = PlayerNameReader::GetName(0);
+			std::cout << "[DEBUG] My ID is " << (int)aircraftId << ", sending name: " << myName << "\n";
+
+			//Wrap it in a packet
+			sf::Packet namePacket;
+			namePacket << static_cast<std::uint8_t>(Client::PacketType::kPlayerNameSync);
+			namePacket << static_cast<std::int32_t>(aircraftId);
+			namePacket << myName;
+
+			//Send to server so it can tell everyone else
+			GetContext().network->SendGameplayPacket(namePacket);
+		}
+
 		if (GetContext().network && GetContext().network->IsClient())
 		{
 			if (a)
@@ -514,6 +529,12 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 				p << aircraftId << pos.x << pos.y << vel.x << vel.y
 					<< hp << static_cast<std::uint8_t>(0) << anim;
 				GetContext().network->SendGameplayPacket(p);
+
+				std::string name = GetContext().network->GetLocalPlayerName();
+				if (!name.empty())
+					GetContext().network->SendPlayerNameSync(
+						static_cast<std::int32_t>(aircraftId), name);
+
 			}
 		}
 	}
@@ -587,6 +608,28 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 		for (int i = 0; i < static_cast<int>(scores.size()); ++i)
 			std::cout << "P" << i << "=" << scores[i] << " ";
 		std::cout << "\n";
+	}
+	break;
+	case Server::PacketType::kPlayerNameSync:
+	{
+		std::uint8_t id = 0;
+		std::string name;
+		if (!(packet >> id >> name)) return;
+
+		//Check if this is our own local aircraft
+		auto localIt = m_net_to_local_player_index.find(id);
+		if (localIt != m_net_to_local_player_index.end())
+		{
+			Aircraft* a = m_world.GetPlayerAircraft(localIt->second);
+			if (a) a->SetPlayerName(name);
+		}
+		else
+		{
+			//It's a remote actor
+			m_world.SetNetworkActorName(id, name);
+		}
+
+		std::cout << "[MP] kPlayerNameSync id=" << (int)id << " name=" << name << "\n";
 	}
 	break;
 	case Server::PacketType::kPlayerColorSync:

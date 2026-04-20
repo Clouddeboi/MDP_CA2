@@ -176,6 +176,7 @@
     <ClCompile Include="Player.cpp" />
     <ClCompile Include="PlayerBindingDisplay.cpp" />
     <ClCompile Include="PlayerBindingManager.cpp" />
+    <ClCompile Include="PlayerNameReader.cpp" />
     <ClCompile Include="PostEffect.cpp" />
     <ClCompile Include="Projectile.cpp" />
     <ClCompile Include="ReceiverCategories.cpp" />
@@ -247,6 +248,7 @@
     <ClInclude Include="PlayerBindingConfig.hpp" />
     <ClInclude Include="PlayerBindingDisplay.hpp" />
     <ClInclude Include="PlayerBindingManager.hpp" />
+    <ClInclude Include="PlayerNameReader.hpp" />
     <ClInclude Include="PostEffect.hpp" />
     <ClInclude Include="Projectile.hpp" />
     <ClInclude Include="ProjectileType.hpp" />
