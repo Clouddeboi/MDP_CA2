@@ -74,6 +74,13 @@ MultiplayerGameState::MultiplayerGameState(StateStack& stack, Context context)
 			a->SetPlayerColor(hostColor);
 			a->SetPlayerName(PlayerNameReader::GetName(0));
 		}
+
+		std::string myName = PlayerNameReader::GetName(0);
+		sf::Packet namePacket;
+		namePacket << static_cast<std::uint8_t>(Client::PacketType::kPlayerNameSync);
+		namePacket << static_cast<std::int32_t>(0); // Host is always ID 0
+		namePacket << myName;
+		GetContext().network->SendGameplayPacket(namePacket);
 	}
 
 	m_world.SetTotalNetworkPlayerCount(2);
