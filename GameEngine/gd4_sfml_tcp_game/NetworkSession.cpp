@@ -427,7 +427,7 @@ void NetworkSession::PollLobbyPackets()
 				m_client_connected = false;
 				m_pending_player_left_events.push_back(0);
 
-				for (int i = 0; i < 4; ++i)
+				for (int i = 0; i < kMaxLobbyPlayers; ++i)
 					m_lobby_connected[i] = false;
 			}
 

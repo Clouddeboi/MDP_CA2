@@ -98,6 +98,8 @@ private:
 	void SetError(const std::string& message);
 
 private:
+	static constexpr int kMaxLobbyPlayers = 20;
+
 	NetworkMode m_mode;
 	std::unique_ptr<GameServer> m_server;
 
@@ -106,9 +108,9 @@ private:
 	std::string m_last_error;
 
 	std::deque<std::tuple<int, int, bool>> m_pending_remote_binding_events;
-	std::array<bool, 4> m_lobby_ready_state{};
-	std::array<int, 4>  m_lobby_color_state{};
-	std::array<bool, 4> m_lobby_connected{};
+	std::array<bool, kMaxLobbyPlayers> m_lobby_ready_state{};
+	std::array<int, kMaxLobbyPlayers> m_lobby_color_state{};
+	std::array<bool, kMaxLobbyPlayers> m_lobby_connected{};
 
 	bool m_pending_start_game = false;
 	std::deque<int> m_pending_player_left_events;
@@ -122,7 +124,7 @@ private:
 	std::deque<sf::Packet> m_pending_gameplay_packets;
 
 	std::deque<int> m_pending_player_joined_events;
-	std::array<bool, 4> m_lobby_was_connected{};
+	std::array<bool, kMaxLobbyPlayers> m_lobby_was_connected{};
 
 	std::string m_local_player_name;
 };
