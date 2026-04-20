@@ -69,7 +69,11 @@ MultiplayerGameState::MultiplayerGameState(StateStack& stack, Context context)
 		}
 
 		Aircraft* a = m_world.GetPlayerAircraft(0);
-		if (a) a->SetPlayerColor(hostColor);
+		if (a)
+		{
+			a->SetPlayerColor(hostColor);
+			a->SetPlayerName(PlayerNameReader::GetName(0));
+		}
 	}
 
 	m_world.SetTotalNetworkPlayerCount(2);
