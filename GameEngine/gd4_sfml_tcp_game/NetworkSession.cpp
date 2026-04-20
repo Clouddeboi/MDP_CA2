@@ -2,6 +2,7 @@
 #include "GameServer.hpp"
 #include "NetworkProtocol.hpp"
 
+#include <iostream>
 #include <SFML/Network/TcpSocket.hpp>
 #include <SFML/Network/IpAddress.hpp>
 #include <SFML/Network/Packet.hpp>
@@ -292,6 +293,7 @@ void NetworkSession::PollLobbyPackets()
 			m_pending_start_game = true;
 
 		while (m_server->PollClientLeave(playerIndex)) {
+			std::cout << "[HOST] PollClientLeave fired: " << playerIndex << "\n";
 			m_lobby_connected[playerIndex] = false;
 			m_pending_player_left_events.push_back(playerIndex);
 		}
@@ -400,7 +402,7 @@ void NetworkSession::PollLobbyPackets()
 
 					peek >> playerId >> x >> y;
 
-					m_pending_player_joined_events.push_back(static_cast<int>(playerId));
+					//m_pending_player_joined_events.push_back(static_cast<int>(playerId));
 					m_pending_gameplay_packets.push_back(p);
 				}
 				else
