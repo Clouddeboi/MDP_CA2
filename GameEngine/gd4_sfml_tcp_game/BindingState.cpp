@@ -150,10 +150,10 @@ bool BindingState::Update(sf::Time dt)
     {
         msg = "Players in lobby: " + std::to_string(GetJoinedPlayerCount()) + " | Press ENTER to start";
     }
-    else
-    {
-        msg = "Waiting in lobby " + std::to_string(GetJoinedPlayerCount()) + "/" + std::to_string(kMaxPlayers) + " | Host will start soon";
-    }
+    //else
+    //{
+    //    //msg = "Waiting in lobby " + std::to_string(GetJoinedPlayerCount()) + "/" + std::to_string(kMaxPlayers) + " | Host will start soon";
+    //}
     m_info_text->setString(msg);
     Utility::CentreOrigin(*m_info_text);
 
