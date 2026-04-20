@@ -38,6 +38,9 @@ bool NetworkSession::StartHosting(const sf::Vector2f& battlefieldSize)
 	try
 	{
 		m_server = std::make_unique<GameServer>(battlefieldSize);
+
+		m_server->SetHostName(m_local_player_name);
+
 		m_mode = NetworkMode::kHost;
 		m_last_error.clear();
 		return true;
