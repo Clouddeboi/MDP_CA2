@@ -1008,6 +1008,9 @@ void GameServer::BroadcastScores(const std::vector<int>& scores)
 void GameServer::SetHostName(const std::string& name)
 {
     m_host_name = name;
+
+    std::scoped_lock lock(m_aircraft_mutex);
+    m_aircraft_info[0].m_player_name = name;
 }
 
 void GameServer::BroadcastNewRound(uint8_t levelIndex)
