@@ -1,6 +1,7 @@
 #include "NetworkSession.hpp"
 #include "GameServer.hpp"
 #include "NetworkProtocol.hpp"
+#include "PlayerNameReader.hpp"
 
 #include <iostream>
 #include <SFML/Network/TcpSocket.hpp>
@@ -14,11 +15,15 @@ NetworkSession::NetworkSession()
 	, m_client_socket(nullptr)
 	, m_client_connected(false)
 	, m_last_error()
+	, m_local_player_name()
 
 {
 	m_lobby_ready_state.fill(false);
 	m_lobby_color_state.fill(-1);
 	m_lobby_connected.fill(false);
+
+	m_local_player_name = PlayerNameReader::GetName(0, "Media/PlayerName.txt");
+	std::cout << "[NET] Local player name loaded: " << m_local_player_name << "\n";
 }
 
 NetworkSession::~NetworkSession()
@@ -599,4 +604,9 @@ void NetworkSession::SendPlayerNameSync(std::int32_t aircraftId, const std::stri
 	packet << name;
 
 	SendGameplayPacket(packet);
+}
+
+const std::string& NetworkSession::GetLocalPlayerName() const
+{
+	return m_local_player_name;
 }

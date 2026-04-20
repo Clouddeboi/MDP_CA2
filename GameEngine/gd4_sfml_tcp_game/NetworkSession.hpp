@@ -92,6 +92,7 @@ public:
 	bool ConsumeRemotePlayerJoined(int& playerIndex);
 
 	void SendPlayerNameSync(std::int32_t aircraftId, const std::string& name);
+	const std::string& GetLocalPlayerName() const;
 
 private:
 	void SetError(const std::string& message);
@@ -122,4 +123,6 @@ private:
 
 	std::deque<int> m_pending_player_joined_events;
 	std::array<bool, 4> m_lobby_was_connected{};
+
+	std::string m_local_player_name;
 };

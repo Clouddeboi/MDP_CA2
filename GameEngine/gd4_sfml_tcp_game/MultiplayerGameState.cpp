@@ -68,7 +68,11 @@ MultiplayerGameState::MultiplayerGameState(StateStack& stack, Context context)
 			srv->PushHostEvent(ev);
 		}
 
+		std::string localName = GetContext().network->GetLocalPlayerName();
 		Aircraft* a = m_world.GetPlayerAircraft(0);
+		if (a && !localName.empty())
+			a->SetPlayerName(localName);
+
 		if (a)
 		{
 			a->SetPlayerColor(hostColor);
@@ -545,6 +549,12 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 				p << aircraftId << pos.x << pos.y << vel.x << vel.y
 					<< hp << static_cast<std::uint8_t>(0) << anim;
 				GetContext().network->SendGameplayPacket(p);
+
+				std::string name = GetContext().network->GetLocalPlayerName();
+				if (!name.empty())
+					GetContext().network->SendPlayerNameSync(
+						static_cast<std::int32_t>(aircraftId), name);
+
 			}
 		}
 	}
@@ -622,18 +632,13 @@ void MultiplayerGameState::HandleServerPacket(sf::Packet& packet)
 	break;
 	case Server::PacketType::kPlayerNameSync:
 	{
-		std::int32_t aircraftId;
+		std::uint8_t id = 0;
 		std::string name;
-		if (packet >> aircraftId >> name)
-		{
-			std::cout << "[DEBUG] Received NameSync: Aircraft " << aircraftId << " = " << name << "\n";
+		if (!(packet >> id >> name)) return;
 
-			Aircraft* a = m_world.GetAircraftByNetworkId(static_cast<int>(aircraftId));
-			if (a)
-			{
-				a->SetPlayerName(name);
-			}
-		}
+		m_world.SetNetworkActorName(id, name);
+
+		std::cout << "[MP] kPlayerNameSync id=" << (int)id << " name=" << name << "\n";
 	}
 	break;
 	case Server::PacketType::kPlayerColorSync:

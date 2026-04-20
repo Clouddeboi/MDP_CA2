@@ -435,24 +435,20 @@ void GameServer::HandleIncomingPackets(sf::Packet& packet, RemotePeer& receiving
     break;
     case Client::PacketType::kPlayerNameSync:
     {
-        std::int32_t aircraftId;
+        std::int32_t id = 0;
         std::string name;
-        if (packet >> aircraftId >> name)
-        {
-            std::scoped_lock lock(m_aircraft_mutex);
-            m_aircraft_info[aircraftId].m_player_name = name;
+        packet >> id >> name;
 
-            sf::Packet relayPacket;
-            relayPacket << static_cast<std::uint8_t>(Server::PacketType::kPlayerNameSync);
-            relayPacket << aircraftId << name;
-            SendToAll(relayPacket);
+        HostEvent ev;
+        ev.type = HostEvent::kNameSync;
+        ev.aircraft_id = static_cast<uint8_t>(id);
+        ev.name = name;
+        PushHostEvent(ev);
 
-            HostEvent ev;
-            ev.type = HostEvent::kNameSync;
-            ev.aircraft_id = static_cast<std::uint8_t>(aircraftId);
-
-            PushHostEvent(ev);
-        }
+        sf::Packet out;
+        out << static_cast<uint8_t>(Server::PacketType::kPlayerNameSync)
+            << static_cast<uint8_t>(id) << name;
+        SendToAll(out);
     }
     break;
     case Client::PacketType::kLobbyLeave:

@@ -559,6 +559,13 @@ Aircraft* World::GetAircraftByNetworkId(int networkId)
 	return nullptr;
 }
 
+void World::SetNetworkActorName(std::uint8_t networkId, const std::string& name)
+{
+	auto it = m_network_actors.find(networkId);
+	if (it != m_network_actors.end() && it->second)
+		it->second->SetPlayerName(name);
+}
+
 bool World::PollNewRoundBroadcast(uint8_t& outLevelIndex)
 {
 	if (!m_new_round_broadcast_ready)

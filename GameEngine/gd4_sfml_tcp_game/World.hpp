@@ -80,6 +80,7 @@ public:
 	uint8_t GetCurrentLevelIndex() const;
 
 	Aircraft* GetAircraftByNetworkId(int networkId);
+	void SetNetworkActorName(std::uint8_t networkId, const std::string& name);
 
 private:
 	void LoadTextures();
