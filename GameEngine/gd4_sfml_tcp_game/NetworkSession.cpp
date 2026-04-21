@@ -283,6 +283,8 @@ void NetworkSession::PollLobbyPackets()
 
 		while (m_server->PollClientLobbyBindingState(playerIndex, color, ready))
 		{
+			if (playerIndex < 0 || playerIndex >= kMaxLobbyPlayers) continue;
+
 			bool wasAlreadyConnected = m_lobby_connected[playerIndex];
 
 			m_lobby_ready_state[playerIndex] = ready;
@@ -302,6 +304,7 @@ void NetworkSession::PollLobbyPackets()
 
 		while (m_server->PollClientLeave(playerIndex)) {
 			std::cout << "[HOST] PollClientLeave fired: " << playerIndex << "\n";
+			if (playerIndex < 0 || playerIndex >= kMaxLobbyPlayers) continue;
 			m_lobby_connected[playerIndex] = false;
 			m_pending_player_left_events.push_back(playerIndex);
 		}
@@ -320,7 +323,6 @@ void NetworkSession::PollLobbyPackets()
 
 			if (status == sf::Socket::Status::Done)
 			{
-				// Peek at the type byte without consuming it
 				sf::Packet peek = p;
 				std::uint8_t type = 0;
 				peek >> type;
@@ -335,6 +337,8 @@ void NetworkSession::PollLobbyPackets()
 					peek >> playerIdx >> color >> ready;
 
 					const int idx = static_cast<int>(playerIdx);
+					if (idx < 0 || idx >= kMaxLobbyPlayers) { continue; }
+
 					m_lobby_ready_state[idx] = ready;
 					m_lobby_color_state[idx] = static_cast<int>(color);
 					m_lobby_connected[idx] = true;
@@ -366,6 +370,7 @@ void NetworkSession::PollLobbyPackets()
 						p >> playerIdx >> color >> ready >> connected;
 
 						const int idx = static_cast<int>(playerIdx);
+						if (idx < 0 || idx >= kMaxLobbyPlayers) continue;
 
 						if (connected)
 						{
@@ -410,12 +415,10 @@ void NetworkSession::PollLobbyPackets()
 
 					peek >> playerId >> x >> y;
 
-					//m_pending_player_joined_events.push_back(static_cast<int>(playerId));
 					m_pending_gameplay_packets.push_back(p);
 				}
 				else
 				{
-					// Not a lobby packet — preserve it for PollGameplayPacket
 					m_pending_gameplay_packets.push_back(p);
 				}
 
@@ -427,7 +430,7 @@ void NetworkSession::PollLobbyPackets()
 				m_client_connected = false;
 				m_pending_player_left_events.push_back(0);
 
-				for (int i = 0; i < 4; ++i)
+				for (int i = 0; i < kMaxLobbyPlayers; ++i)
 					m_lobby_connected[i] = false;
 			}
 
